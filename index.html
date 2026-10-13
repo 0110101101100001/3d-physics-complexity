@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Deteção de Colisão 3D - O(n²)</title>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Inter:wght@300;400;500&family=Playfair+Display:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Contador Total -->
+  <div id="collisionBadge">Total: 0</div>
+
+  <!-- Botão de Minimizar (Canto Inferior Esquerdo) -->
+  <button id="minimizeBtn" title="Mostrar/Esconder Controlos">⚙ Controlos</button>
+
+  <!-- Painel Flutuante Central -->
+  <div id="controlPanel">
+    <div id="panelContent">
+      <div class="panelRow">
+        <!-- Coluna 1: Teoria -->
+        <div class="panelCol">
+          <h3>DETEÇÃO DE COLISÃO</h3>
+          <p><strong>CONTEXTO:</strong> Otimização de motores físicos para simulações 3D.</p>
+          <p><strong>COMPLEXIDADE:</strong> Pior Caso: O(n²) (Verificação ingénua).</p>
+          <p><strong>OP. BÁSICA:</strong> Teste de sobreposição AABB nos eixos X, Y e Z.</p>
+        </div>
+
+        <!-- Coluna 2: Controlos -->
+        <div class="panelCol">
+          <div class="control-group">
+            <label for="cubeCount">Número de cubos</label>
+            <div style="display:flex; align-items:center; gap:6px;">
+              <input type="range" id="cubeCount" min="2" max="20" value="8">
+              <input type="number" id="cubeCountInput" min="2" max="20" value="8" style="width:50px;">
+            </div>
+          </div>
+          <div class="control-group">
+            <label for="speed">Velocidade</label>
+            <input type="range" id="speed" min="0.2" max="2" step="0.1" value="0.8">
+          </div>
+          <div class="control-group">
+            <label><input type="checkbox" id="showGrid" checked> Mostrar grade</label>
+          </div>
+          <div class="control-group" style="display:flex; gap:8px;">
+            <button id="toggleBtn" class="btn">PAUSAR</button>
+            <button id="resetBtn" class="btn btn-secondary">REINICIAR</button>
+            <button id="theoryBtn" class="btn">TEORIA</button>
+          </div>
+        </div>
+
+        <!-- Coluna 3: Pseudocódigo -->
+        <div class="panelCol terminal">
+          <pre>&#62; FUNCAO intersectarAABB(A, B):
+&#62;   dx = abs(A.x - B.x)
+&#62;   dy = abs(A.y - B.y)
+&#62;   dz = abs(A.z - B.z)
+&#62;
+&#62;   SE dx &lt; (A.size + B.size)/2
+&#62;    E dy &lt; (A.size + B.size)/2
+&#62;    E dz &lt; (A.size + B.size)/2:
+&#62;      RETORNAR VERDADEIRO
+&#62;   RETORNAR FALSO</pre>
+          <div><span class="blink">_</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de Teoria Editorial -->
+  <div id="theoryModal" class="hidden">
+    <div class="modal-content">
+      <button id="closeTheoryBtn">X FECHAR</button>
+      <div class="theory-editorial">
+        <div class="theory-block">
+          <div class="tag">01 // CONTEXTO</div>
+          <h4>Contextualização do Problema</h4>
+          <p>Otimização de motores físicos para videojogos e simulações 3D. Em cenários densos, testar colisões cegas consome rapidamente o CPU, tornando essencial métodos de rejeição rápida (Broad Phase).</p>
+        </div>
+        <div class="theory-block">
+          <div class="tag">02 // ALGORITMO</div>
+          <h4>Descrição do Algoritmo</h4>
+          <p>O algoritmo Axis-Aligned Bounding Box (AABB) delimita cada objeto com um cubo alinhado aos eixos. A colisão é detetada verificando simultaneamente a sobreposição de distâncias nos eixos X, Y e Z.</p>
+        </div>
+        <div class="theory-block">
+          <div class="tag">03 // MAPEAMENTO</div>
+          <h4>Mapeamento de Operações</h4>
+          <p>A operação básica é o <strong>teste lógico de sobreposição AABB</strong>. Para N objetos, numa abordagem de força bruta, a operação é executada para todos os pares possíveis na cena.</p>
+        </div>
+        <div class="theory-block">
+          <div class="tag">04 // PROVA MATEMÁTICA</div>
+          <h4>Análise e Prova Matemática</h4>
+          <p>• Melhor Caso (Ω): O(1) se otimizado com particionamento espacial.<br>• Pior Caso (O): O(n²). A contagem de verificações na matriz de N elementos é resolvida pela Progressão Aritmética: (N*(N-1))/2.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="main.js"></script>
+</body>
+</html>

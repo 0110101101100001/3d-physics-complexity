@@ -1,0 +1,165 @@
+:root {
+  --bg-main: #1C1B1A;         /* Fundo Anthropic */
+  --sidebar-bg: #262524;      
+  --grid-line: #3D3B3A;       
+  --text-main: #EAE8E4;       
+  --text-muted: #A3A19E;      
+  --accent: #D97706;          /* Laranja Claude */
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body, html {
+  height: 100%;
+  font-family: 'Inter', sans-serif;
+  background-color: var(--bg-main);
+  color: var(--text-main);
+  overflow: hidden;
+}
+
+canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 0;
+  display: block;
+}
+
+/* UI Elements - Z-Index 10 para ficar acima do Canvas */
+#collisionBadge, #minimizeBtn, #controlPanel, #theoryModal {
+  z-index: 10;
+}
+
+#collisionBadge {
+  position: fixed;
+  top: 20px;
+  left: 20px;
+  background: var(--sidebar-bg);
+  border: 1px solid var(--grid-line);
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 1.1rem;
+  font-weight: 600;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+#minimizeBtn {
+  position: fixed;
+  left: 20px;
+  bottom: 20px;
+  background: var(--sidebar-bg);
+  border: 1px solid var(--grid-line);
+  color: var(--text-main);
+  border-radius: 8px;
+  padding: 10px 16px;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+  font-weight: 500;
+  transition: all 0.3s;
+}
+
+#controlPanel {
+  position: fixed;
+  left: 50%;
+  bottom: 20px;
+  width: 90%;
+  max-width: 1000px;
+  transform: translateX(-50%);
+  background: rgba(38, 37, 36, 0.85);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+#controlPanel.panel-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, 20px);
+}
+
+.panelRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1.5fr;
+  gap: 20px;
+}
+
+.panelCol h3 {
+  font-family: 'Playfair Display', serif;
+  margin-bottom: 10px;
+  color: var(--accent);
+}
+
+.panelCol p, .panelCol label {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+  line-height: 1.5;
+}
+
+.control-group { margin-bottom: 12px; }
+
+input[type="range"] {
+  width: 100%; height: 4px; background: #444; border-radius: 2px;
+  -webkit-appearance: none;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 14px; height: 14px;
+  background: var(--text-main); border-radius: 50%; cursor: pointer;
+}
+input[type="number"] {
+  background: var(--bg-main); border: 1px solid var(--grid-line);
+  color: var(--text-main); padding: 4px; border-radius: 4px;
+}
+
+.btn {
+  background: #333130; color: var(--text-main);
+  border: 1px solid rgba(255,255,255,0.05); border-radius: 6px;
+  padding: 8px 12px; cursor: pointer; font-size: 0.8rem;
+  transition: all 0.2s; flex: 1; text-align: center;
+}
+.btn:hover { background: #3D3B3A; }
+.btn:active { transform: scale(0.95); }
+
+.terminal {
+  background: rgba(0,0,0,0.4);
+  padding: 15px; border-radius: 8px;
+  font-family: 'Fira Code', monospace;
+  font-size: 0.75rem; color: var(--text-muted);
+}
+.blink { animation: blinker 1s linear infinite; }
+@keyframes blinker { 50% { opacity: 0; } }
+
+/* Modal Editorial */
+#theoryModal {
+  position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+  background: rgba(15, 14, 13, 0.85); backdrop-filter: blur(8px);
+  display: flex; justify-content: center; align-items: center;
+}
+#theoryModal.hidden { display: none; }
+.modal-content {
+  width: 90%; max-width: 800px; max-height: 90vh; overflow-y: auto;
+  position: relative; padding: 40px; background: var(--bg-main);
+  border: 1px solid var(--grid-line); border-radius: 16px;
+}
+#closeTheoryBtn {
+  position: absolute; top: 20px; right: 20px;
+  background: transparent; color: var(--text-muted); border: none; cursor: pointer; font-weight: bold;
+}
+.theory-editorial {
+  display: flex; flex-direction: column; gap: 24px;
+}
+.theory-block {
+  background: rgba(255,255,255,0.02); padding: 20px;
+  border: 1px solid rgba(255,255,255,0.05); border-radius: 8px;
+}
+.theory-block .tag {
+  font-family: 'Fira Code', monospace; font-size: 0.75rem; color: var(--accent); margin-bottom: 8px;
+}
+.theory-block h4 {
+  font-family: 'Playfair Display', serif; font-size: 1.2rem; margin-bottom: 8px; color: var(--text-main);
+}
