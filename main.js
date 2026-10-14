@@ -116,12 +116,14 @@ const gridDebugGroup = new THREE.Group();
 scene.add(gridDebugGroup);
 
 function renderGridDebug() {
+  // Limpa sempre os gizmos antigos do frame anterior
   while (gridDebugGroup.children.length > 0) {
     const child = gridDebugGroup.children.pop();
     if (child.geometry) child.geometry.dispose();
     if (child.material) child.material.dispose();
   }
 
+  // Se o modo atual NÃO for 'grid', para por aqui (as caixas somem imediatamente)
   if (currentBroadPhase !== 'grid' || !spatialGrid) return;
 
   const cellGeo = new THREE.BoxGeometry(spatialGrid.cellSize, spatialGrid.cellSize, spatialGrid.cellSize);
@@ -1853,20 +1855,15 @@ document.getElementById('broadPhaseSelect').addEventListener('change', (e) => {
 
   setModeTheme(currentBroadPhase);
   updateContextPanel(currentBroadPhase);
+  renderGridDebug(); // <--- FORÇA A LIMPEZA IMEDIATA DOS GIZMOS AQUI
 
   controlPanel.classList.remove('mode-brute', 'mode-grid', 'mode-octree');
   controlPanel.classList.add('mode-' + currentBroadPhase);
 
   switch (currentBroadPhase) {
-    case 'brute':
-      startTyping(pseudoCodeBrute);
-      break;
-    case 'grid':
-      startTyping(pseudoCodeSpatial);
-      break;
-    case 'octree':
-      startTyping(pseudoCodeOctree);
-      break;
+    case 'brute': startTyping(pseudoCodeBrute); break;
+    case 'grid': startTyping(pseudoCodeSpatial); break;
+    case 'octree': startTyping(pseudoCodeOctree); break;
   }
 });
 
