@@ -84,6 +84,11 @@
         </span>
       </div>
       <div class="topbar-sep">|</div>
+      <!-- INÍCIO DA MUDANÇA: Métrica de Economia adicionada aqui -->
+      <div class="topbar-metric">
+        <span class="metric-value" id="savings-metric" style="color: #52525b; font-size: 0.75rem; letter-spacing: 0.05em; padding-right: 8px;">ECONOMIA: 0%</span>
+      </div>
+      <!-- FIM DA MUDANÇA -->
       <div class="topbar-metric">
         <span class="metric-label">MODO</span>
         <span class="metric-value accent" id="tbMode">Bruta O(n²)</span>
@@ -124,12 +129,14 @@
     <div id="panelContent">
       <div class="bento-grid">
 
+        <!-- INÍCIO DA MUDANÇA: IDs adicionados ao painel CONTEXTO -->
         <div class="bento-cell bento-theory">
           <div class="bento-label">01 // CONTEXTO</div>
-          <p><strong>Algoritmo:</strong> AABB — Axis-Aligned Bounding Box</p>
-          <p><strong>Pior Caso:</strong> O(n²) — verificação por força bruta</p>
-          <p><strong>Op. Básica:</strong> Sobreposição nos eixos X, Y e Z</p>
+          <p><strong>Algoritmo:</strong> <span id="context-algorithm">AABB — Axis-Aligned Bounding Box</span></p>
+          <p><strong>Pior Caso:</strong> <span id="context-worstcase">O(n²) — verificação por força bruta</span></p>
+          <p><strong>Op. Básica:</strong> <span id="context-op">Sobreposição nos eixos X, Y e Z</span></p>
         </div>
+        <!-- FIM DA MUDANÇA -->
 
         <div class="bento-cell bento-sim">
           <div class="bento-label">02 // SIMULAÇÃO</div>
@@ -145,12 +152,14 @@
             <input type="range" id="speed" min="0.2" max="2" step="0.1" value="0.8" autocomplete="off">
           </div>
           <div class="control-group">
+            <!-- INÍCIO DA MUDANÇA: ID do seletor garantido como 'broadPhaseSelect' e values padronizados -->
             <label for="broadPhaseSelect">Estratégia Broad-Phase</label>
             <select id="broadPhaseSelect" autocomplete="off">
               <option value="brute">Força Bruta O(n²)</option>
               <option value="grid">Grade Espacial Uniforme O(n)</option>
               <option value="octree">Particionamento Hierárquico O(n log n)</option>
             </select>
+            <!-- FIM DA MUDANÇA -->
           </div>
           <div class="control-group checkbox-row">
             <label class="checkbox-label">

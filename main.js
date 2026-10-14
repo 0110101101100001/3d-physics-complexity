@@ -15,6 +15,10 @@ renderer.domElement.style.width = '100vw';
 renderer.domElement.style.height = '100vh';
 document.body.appendChild(renderer.domElement);
 
+// --- 1.1 CONFIGURAÇÃO DE SOMBRAS DE CONTACTO ---
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
 const controls = new THREE.OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 controls.dampingFactor = 0.05;
@@ -22,14 +26,269 @@ controls.maxPolarAngle = Math.PI / 2 - 0.02;
 controls.minDistance = 15;
 controls.maxDistance = 150;
 
+const clock = new THREE.Clock(); // Clock para calcular delta time do ParticleSystem
+
 scene.add(new THREE.AmbientLight(0xffe0d0, 0.7));
 const dirLight = new THREE.DirectionalLight(0xffffff, 1.5);
 dirLight.position.set(10, 30, 20);
+dirLight.castShadow = true;
+dirLight.shadow.mapSize.width = 1024;
+dirLight.shadow.mapSize.height = 1024;
+dirLight.shadow.camera.near = 0.5;
+dirLight.shadow.camera.far = 150;
+dirLight.shadow.camera.left = -30;
+dirLight.shadow.camera.right = 30;
+dirLight.shadow.camera.top = 30;
+dirLight.shadow.camera.bottom = -30;
+dirLight.shadow.bias = -0.0005;
 scene.add(dirLight);
 
 scene.add(new THREE.GridHelper(50, 50, 0x3d3a4a, 0x2b2a33));
 
-// --- 2. VARIÁVEIS E CORES ---
+// Plano sutil recetor de sombra na base do chão
+const shadowPlaneGeo = new THREE.PlaneGeometry(100, 100);
+const shadowPlaneMat = new THREE.ShadowMaterial({ opacity: 0.4 });
+const shadowPlane = new THREE.Mesh(shadowPlaneGeo, shadowPlaneMat);
+shadowPlane.rotation.x = -Math.PI / 2;
+shadowPlane.position.y = -0.01;
+shadowPlane.receiveShadow = true;
+scene.add(shadowPlane);
+
+// --- 1.2 CAIXA DE CONFINAMENTO (BOUNDING CAGE) ---
+const cageGeo = new THREE.BoxGeometry(40, 20, 40);
+const cageEdges = new THREE.EdgesGeometry(cageGeo);
+const cageMat = new THREE.LineBasicMaterial({
+  color: 0x6e6b85, // Tom mais claro para evitar a quantização para preto pelo shader
+  transparent: true,
+  opacity: 0.7
+});
+const cageMesh = new THREE.LineSegments(cageEdges, cageMat);
+cageMesh.position.set(0, 10, 0);
+scene.add(cageMesh);
+
+// --- 1.3 LUZ DE IMPACTO, ONDAS DE CHOQUE E HELPERS ---
+const impactLight = new THREE.PointLight(0xffaa00, 0, 25);
+scene.add(impactLight);
+let lightTimer = 0;
+
+function triggerImpactLight(pos) {
+  impactLight.position.copy(pos);
+  impactLight.intensity = 8;
+  lightTimer = 0.12;
+}
+
+const shockwaves = [];
+const shockwaveGeo = new THREE.RingGeometry(0.1, 0.4, 32);
+
+function triggerShockwave(pos) {
+  const mat = new THREE.MeshBasicMaterial({
+    color: 0xffaa00,
+    side: THREE.DoubleSide,
+    transparent: true,
+    opacity: 0.8
+  });
+  const ring = new THREE.Mesh(shockwaveGeo, mat);
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.set(pos.x, 0.05, pos.z);
+  scene.add(ring);
+  shockwaves.push({ mesh: ring, scale: 1, opacity: 0.8 });
+}
+
+// Visualizador de limite individual AABB (Hover/Drag)
+const hoverBoxHelper = new THREE.BoxHelper(new THREE.Mesh(), 0x00ffcc);
+hoverBoxHelper.visible = false;
+scene.add(hoverBoxHelper);
+
+// Guia de projeção vertical até ao chão (Height Drop Line)
+const dropLineGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
+const dropLineMat = new THREE.LineDashedMaterial({
+  color: 0x00ffcc,
+  dashSize: 0.4,
+  gapSize: 0.2,
+  linewidth: 1.5
+});
+const dropLineMesh = new THREE.Line(dropLineGeo, dropLineMat);
+dropLineMesh.visible = false;
+scene.add(dropLineMesh);
+
+// Gizmo de células ativas da Grade Espacial
+const gridDebugGroup = new THREE.Group();
+scene.add(gridDebugGroup);
+
+function renderGridDebug() {
+  while (gridDebugGroup.children.length > 0) {
+    const child = gridDebugGroup.children.pop();
+    if (child.geometry) child.geometry.dispose();
+    if (child.material) child.material.dispose();
+  }
+
+  if (currentBroadPhase !== 'grid' || !spatialGrid) return;
+
+  const cellGeo = new THREE.BoxGeometry(spatialGrid.cellSize, spatialGrid.cellSize, spatialGrid.cellSize);
+  const edgesGeo = new THREE.EdgesGeometry(cellGeo);
+  const cellMat = new THREE.LineBasicMaterial({ color: 0x00ddff, transparent: true, opacity: 0.15 });
+
+  for (const key of spatialGrid.grid.keys()) {
+    const [cx, cy, cz] = key.split(',').map(Number);
+    const wireframe = new THREE.LineSegments(edgesGeo, cellMat);
+    wireframe.position.set(
+      (cx + 0.5) * spatialGrid.cellSize,
+      (cy + 0.5) * spatialGrid.cellSize,
+      (cz + 0.5) * spatialGrid.cellSize
+    );
+    gridDebugGroup.add(wireframe);
+  }
+}
+
+// ====================== PARTICLE SYSTEM – IMPACT SPARKS ======================
+class ParticleSystem {
+    constructor(maxParticles = 200) {
+        this.maxParticles = maxParticles;
+        this.particles = new Array(maxParticles).fill(null);
+        this.free = [];
+
+        const geometry = new THREE.BufferGeometry();
+        const positions = new Float32Array(maxParticles * 3);
+        const colors    = new Float32Array(maxParticles * 3);
+        const sizes     = new Float32Array(maxParticles);
+
+        geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3).setUsage(THREE.DynamicDrawUsage));
+        geometry.setAttribute('color',    new THREE.BufferAttribute(colors,    3).setUsage(THREE.DynamicDrawUsage));
+        geometry.setAttribute('size',     new THREE.BufferAttribute(sizes,     1).setUsage(THREE.DynamicDrawUsage));
+
+        const material = new THREE.PointsMaterial({
+            size: 0.1,
+            vertexColors: true,
+            transparent: true,
+            blending: THREE.AdditiveBlending,
+            depthTest: true
+        });
+
+        this.points = new THREE.Points(geometry, material);
+        scene.add(this.points);
+
+        for (let i = 0; i < maxParticles; i++) this.free.push(i);
+    }
+
+    spawn(position, count = 5 + Math.floor(Math.random() * 6)) {
+        for (let i = 0; i < count && this.free.length > 0; i++) {
+            const idx = this.free.pop();
+            const p = {};
+
+            p.position = position.clone();
+
+            const speed = 2 + Math.random() * 3;
+            const phi   = Math.random() * Math.PI * 2;
+            const costheta = 2 * Math.random() - 1;
+            const sintheta = Math.sqrt(1 - costheta * costheta);
+            p.velocity = new THREE.Vector3(
+                sintheta * Math.cos(phi) * speed,
+                sintheta * Math.sin(phi) * speed,
+                costheta * speed
+            );
+
+            p.life = 0;
+            p.maxLife = 0.2 + Math.random() * 0.2;
+
+            p.color = new THREE.Color(0xffaa00);
+            p.size = 0.1 + Math.random() * 0.05;
+
+            this.particles[idx] = p;
+
+            const posAttr = this.points.geometry.attributes.position;
+            const colAttr = this.points.geometry.attributes.color;
+            const sizeAttr = this.points.geometry.attributes.size;
+
+            posAttr.setXYZ(idx, p.position.x, p.position.y, p.position.z);
+            colAttr.setXYZ(idx, p.color.r, p.color.g, p.color.b);
+            sizeAttr.setX(idx, p.size);
+
+            posAttr.needsUpdate = true;
+            colAttr.needsUpdate = true;
+            sizeAttr.needsUpdate = true;
+        }
+    }
+
+    update(delta) {
+        let dirty = false;
+        for (let i = 0; i < this.maxParticles; i++) {
+            const p = this.particles[i];
+            if (!p) continue;
+
+            p.life += delta;
+            if (p.life >= p.maxLife) {
+                this.free.push(i);
+                this.particles[i] = null;
+                const sizeAttr = this.points.geometry.attributes.size;
+                sizeAttr.setX(i, 0);
+                sizeAttr.needsUpdate = true;
+                continue;
+            }
+
+            p.velocity.y -= 9.8 * 0.3 * delta;
+            p.position.addScaledVector(p.velocity, delta);
+
+            const progress = p.life / p.maxLife;
+            const alpha = 1 - progress;
+            const fadedColor = p.color.clone().multiplyScalar(alpha);
+
+            const posAttr = this.points.geometry.attributes.position;
+            const colAttr = this.points.geometry.attributes.color;
+            posAttr.setXYZ(i, p.position.x, p.position.y, p.position.z);
+            colAttr.setXYZ(i, fadedColor.r, fadedColor.g, fadedColor.b);
+
+            posAttr.needsUpdate = true;
+            colAttr.needsUpdate = true;
+            dirty = true;
+        }
+
+        if (dirty) {
+            this.points.geometry.attributes.position.needsUpdate = true;
+            this.points.geometry.attributes.color.needsUpdate = true;
+        }
+    }
+}
+
+const impactParticles = new ParticleSystem();
+
+// ====================== LASER TEST LINES (VISUALIZAÇÃO BIG-O) ======================
+const MAX_PAIR_LINES = 12000;
+const pairLinesGeo = new THREE.BufferGeometry();
+const pairLinesPos = new Float32Array(MAX_PAIR_LINES * 2 * 3);
+pairLinesGeo.setAttribute('position', new THREE.BufferAttribute(pairLinesPos, 3).setUsage(THREE.DynamicDrawUsage));
+
+const pairLinesMat = new THREE.LineBasicMaterial({
+  color: 0xff7139,
+  transparent: true,
+  opacity: 0.35,
+  blending: THREE.AdditiveBlending
+});
+const pairLinesMesh = new THREE.LineSegments(pairLinesGeo, pairLinesMat);
+scene.add(pairLinesMesh);
+
+let activePairLineCount = 0;
+
+function clearPairLines() {
+  activePairLineCount = 0;
+}
+
+function addPairLine(posA, posB) {
+  if (activePairLineCount >= MAX_PAIR_LINES) return;
+  const idx = activePairLineCount * 6;
+  pairLinesPos[idx]     = posA.x; pairLinesPos[idx + 1] = posA.y; pairLinesPos[idx + 2] = posA.z;
+  pairLinesPos[idx + 3] = posB.x; pairLinesPos[idx + 4] = posB.y; pairLinesPos[idx + 5] = posB.z;
+  activePairLineCount++;
+}
+
+function updatePairLinesBuffer() {
+  pairLinesGeo.setDrawRange(0, activePairLineCount * 2);
+  pairLinesGeo.attributes.position.needsUpdate = true;
+  
+  const modeColorStr = getComputedStyle(document.documentElement).getPropertyValue('--mode-color').trim();
+  if (modeColorStr) pairLinesMat.color.setStyle(modeColorStr);
+}
+
+// --- 2. VARIÁVEIS, CORES E CONFIGURAÇÃO DE CONTEXTO ---
 let cubes = [];
 let nextId = 0;
 let draggedCube = null;
@@ -46,7 +305,35 @@ let typingInterval = null;
 let lastComparisonCount = 0;
 const pseudoCodeEl = document.getElementById('pseudoCode');
 
-// DATA LOGGING - Estrutura de log global em memória
+const CONTEXT_CONFIG = {
+  brute: {
+    algorithm: "AABB — Axis-Aligned Bounding Box",
+    worstCase: "O(n²) — verificação por força bruta",
+    op: "Sobreposição nos eixos X, Y e Z"
+  },
+  grid: {
+    algorithm: "Grade Espacial Uniforme 3D",
+    worstCase: "O(n²) no pior caso / O(n) no caso médio",
+    op: "Hashing espacial e teste entre células vizinhas"
+  },
+  octree: {
+    algorithm: "Octree 3D — Subdivisão Recursiva",
+    worstCase: "O(n²) no pior caso / O(n log n) no caso médio",
+    op: "Travessia de 8 octantes e teste de nós com entidades"
+  }
+};
+
+function updateContextPanel(mode) {
+  const config = CONTEXT_CONFIG[mode] || CONTEXT_CONFIG.brute;
+  const algEl = document.getElementById('context-algorithm');
+  const worstEl = document.getElementById('context-worstcase');
+  const opEl = document.getElementById('context-op');
+
+  if (algEl) algEl.textContent = config.algorithm;
+  if (worstEl) worstEl.textContent = config.worstCase;
+  if (opEl) opEl.textContent = config.op;
+}
+
 let simulationLogArray = [];
 
 let frameCount = 0;
@@ -92,49 +379,73 @@ const pseudoCodeOctree = `> FUNCAO inserir(no, obj, box):
 >       candidatos(filho, obj, box)
 >   RETORNAR candidatos`;
 
-// Grade Espacial O(n)
+// Grade Espacial O(n) com Inserção Multi-Célula (Evita que cubos se atravessem)
 class SpatialGrid {
-  constructor(cellSize) {
+  constructor(cellSize = 2) {
     this.cellSize = cellSize;
     this.grid = new Map();
   }
 
   getCellKey(x, y, z) {
-    return `${Math.floor(x / this.cellSize)},${Math.floor(y / this.cellSize)},${Math.floor(z / this.cellSize)}`;
-  }
-
-  insert(obj) {
-    const key = this.getCellKey(obj.mesh.position.x, obj.mesh.position.y, obj.mesh.position.z);
-    if (!this.grid.has(key)) {
-      this.grid.set(key, []);
-    }
-    this.grid.get(key).push(obj);
+    return `${x},${y},${z}`;
   }
 
   clear() {
     this.grid.clear();
   }
 
-  getPotentialCollisions(obj) {
-    const potential = [];
-    const x = Math.floor(obj.mesh.position.x / this.cellSize);
-    const y = Math.floor(obj.mesh.position.y / this.cellSize);
-    const z = Math.floor(obj.mesh.position.z / this.cellSize);
+  insert(obj) {
+    const half = obj.size / 2;
+    const pos = obj.mesh.position;
 
-    for (let dx = -1; dx <= 1; dx++) {
-      for (let dy = -1; dy <= 1; dy++) {
-        for (let dz = -1; dz <= 1; dz++) {
-          const neighborKey = `${x + dx},${y + dy},${z + dz}`;
-          const neighborCell = this.grid.get(neighborKey) || [];
-          potential.push(...neighborCell);
+    const minX = Math.floor((pos.x - half) / this.cellSize);
+    const maxX = Math.floor((pos.x + half) / this.cellSize);
+    const minY = Math.floor((pos.y - half) / this.cellSize);
+    const maxY = Math.floor((pos.y + half) / this.cellSize);
+    const minZ = Math.floor((pos.z - half) / this.cellSize);
+    const maxZ = Math.floor((pos.z + half) / this.cellSize);
+
+    for (let x = minX; x <= maxX; x++) {
+      for (let y = minY; y <= maxY; y++) {
+        for (let z = minZ; z <= maxZ; z++) {
+          const key = this.getCellKey(x, y, z);
+          if (!this.grid.has(key)) this.grid.set(key, []);
+          this.grid.get(key).push(obj);
         }
       }
     }
-    return potential;
+  }
+
+  getPotentialCollisions(obj) {
+    const half = obj.size / 2;
+    const pos = obj.mesh.position;
+    const minX = Math.floor((pos.x - half) / this.cellSize);
+    const maxX = Math.floor((pos.x + half) / this.cellSize);
+    const minY = Math.floor((pos.y - half) / this.cellSize);
+    const maxY = Math.floor((pos.y + half) / this.cellSize);
+    const minZ = Math.floor((pos.z - half) / this.cellSize);
+    const maxZ = Math.floor((pos.z + half) / this.cellSize);
+
+    const potentialSet = new Set();
+    for (let x = minX; x <= maxX; x++) {
+      for (let y = minY; y <= maxY; y++) {
+        for (let z = minZ; z <= maxZ; z++) {
+          const cell = this.grid.get(this.getCellKey(x, y, z));
+          if (cell) {
+            for (let i = 0; i < cell.length; i++) {
+              if (cell[i].id !== obj.id) {
+                potentialSet.add(cell[i]);
+              }
+            }
+          }
+        }
+      }
+    }
+    return Array.from(potentialSet);
   }
 }
 
-// Octree simulado com heurística espacial avançada O(n log n)
+// Octree simulado O(n log n)
 class OctreeSimulator {
   constructor(boundsSize = 60, maxDepth = 6, maxObjectsPerNode = 4) {
     this.boundsSize  = boundsSize;
@@ -197,12 +508,14 @@ class OctreeSimulator {
     }
 
     if (node.children) {
+      let inserted = false;
       for (let i = 0; i < 8; i++) {
-        if (node.children[i].bounds.containsBox(objBox)) {
+        if (node.children[i].bounds.intersectsBox(objBox)) {
           this._insertNode(node.children[i], obj, objBox);
-          return;
+          inserted = true;
         }
       }
+      if (inserted) return;
     }
 
     node.objects.push(obj);
@@ -347,7 +660,7 @@ const statAlgo = document.getElementById('statAlgo');
 const statComp = document.getElementById('statComp');
 const statTime = document.getElementById('statTime');
 
-// --- 4. PÓS-PROCESSAMENTO: EFEITO DITHERING ---
+// --- 4. PÓS-PROCESSAMENTO: EFEITO DITHERING + SCANLINES CRT ---
 const composer = new THREE.EffectComposer(renderer);
 composer.setSize(window.innerWidth * pixelScale, window.innerHeight * pixelScale);
 
@@ -393,6 +706,11 @@ const ditherShader = {
     float dither = (bayer / 15.0) - 0.5;
     vec3 retroColor = color.rgb + dither * 0.15;
     retroColor = floor(retroColor * 12.0) / 12.0;
+
+    // Efeito CRT Scanline sutil (linhas horizontais retro)
+    float scanline = sin(vUv.y * resolution.y * 3.1415) * 0.04;
+    retroColor -= scanline;
+
     gl_FragColor = vec4(retroColor, color.a);
   }
 `
@@ -647,12 +965,25 @@ function createCube(spawnIndex = 0) {
     wireframe: true
   });
   const mesh = new THREE.Mesh(geometry, solidMaterial);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
   mesh.position.set((Math.random() - 0.5) * 40, (Math.random() * 15) + size, (Math.random() - 0.5) * 40);
   const speed = parseFloat(speedSlider.value);
   const velocity = new THREE.Vector3((Math.random() - 0.5) * speed, (Math.random() - 0.5) * speed, (Math.random() - 0.5) * speed);
 
+  const arrowHelper = new THREE.ArrowHelper(
+    velocity.clone().normalize(),
+    mesh.position,
+    3,
+    0xffdd44,
+    0.8,
+    0.5
+  );
+  scene.add(arrowHelper);
+
   const cubeData = {
     mesh,
+    arrow: arrowHelper,
     id: nextId++,
     size,
     velocity,
@@ -662,7 +993,7 @@ function createCube(spawnIndex = 0) {
     geometry,
     solidMaterial,
     wireframeMaterial,
-    collisionCount: 0,            // Heatmap: contador de toques acumulados
+    collisionCount: 0,
     spawnScale: -Math.min(spawnIndex * 0.08, 1.5),
     spawnDone: false
   };
@@ -680,6 +1011,7 @@ function createCube(spawnIndex = 0) {
 
 function initCubes() {
   cubes.forEach(c => {
+    if (c.arrow) scene.remove(c.arrow);
     scene.remove(c.mesh);
     c.mesh.geometry.dispose();
     c.mesh.material.dispose();
@@ -693,7 +1025,7 @@ function initCubes() {
   currentCollidingPairs.clear();
 
   if (currentBroadPhase === 'grid') {
-    spatialGrid = new SpatialGrid(10);
+    spatialGrid = new SpatialGrid(2);
     octreeSimulator = null;
   } else if (currentBroadPhase === 'octree') {
     octreeSimulator = new OctreeSimulator(60);
@@ -735,7 +1067,8 @@ function updateUI() {
   }
 }
 
-function playSound() {
+// SÍNTESE DE ÁUDIO DINÂMICA POR ENERGIA DE COLISÃO
+function playSound(impactVelocity = 1.0) {
   if (!soundEnabled) return;
   if (!audioContext) {
     audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -745,15 +1078,22 @@ function playSound() {
   }
   const oscillator = audioContext.createOscillator();
   const gainNode = audioContext.createGain();
-  oscillator.type = 'sine';
-  oscillator.frequency.setValueAtTime(400, audioContext.currentTime);
+
+  // Frequência varia entre 220Hz (grave) e 1200Hz (agudo) de acordo com a velocidade do impacto
+  const baseFreq = THREE.MathUtils.clamp(220 + impactVelocity * 140, 180, 1200);
+
+  oscillator.type = 'triangle'; // Onda triângular estilo chiptune retro
+  oscillator.frequency.setValueAtTime(baseFreq, audioContext.currentTime);
+
   gainNode.gain.setValueAtTime(0.0, audioContext.currentTime);
-  gainNode.gain.linearRampToValueAtTime(0.3, audioContext.currentTime + 0.01);
-  gainNode.gain.linearRampToValueAtTime(0.0, audioContext.currentTime + 0.1);
+  gainNode.gain.linearRampToValueAtTime(0.25, audioContext.currentTime + 0.01);
+  gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.12);
+
   oscillator.connect(gainNode);
   gainNode.connect(audioContext.destination);
+
   oscillator.start();
-  oscillator.stop(audioContext.currentTime + 0.15);
+  oscillator.stop(audioContext.currentTime + 0.13);
 }
 
 function intersectAABB(a, b) {
@@ -763,9 +1103,7 @@ function intersectAABB(a, b) {
          Math.abs(a.mesh.position.z - b.mesh.position.z) < (hA + hB);
 }
 
-// --- RESOLUÇÃO DE COLISÃO AABB (Física Real) ---
-// Separa os dois cubos ao longo do eixo de menor penetração (MTV — Minimum Translation Vector)
-// e inverte a componente da velocidade nesse eixo, simulando um ressalto elástico.
+// RESOLUÇÃO DE COLISÃO AABB
 function resolveCollision(cubeA, cubeB) {
   const hA = cubeA.size / 2;
   const hB = cubeB.size / 2;
@@ -775,14 +1113,11 @@ function resolveCollision(cubeA, cubeB) {
   const dy = cubeA.mesh.position.y - cubeB.mesh.position.y;
   const dz = cubeA.mesh.position.z - cubeB.mesh.position.z;
 
-  // Profundidade de penetração em cada eixo (overlap positivo = estão sobrepostos)
   const overlapX = sum - Math.abs(dx);
   const overlapY = sum - Math.abs(dy);
   const overlapZ = sum - Math.abs(dz);
 
-  // Eixo de menor penetração (MTV)
   if (overlapX <= overlapY && overlapX <= overlapZ) {
-    // Colisão no eixo X
     const sign = dx >= 0 ? 1 : -1;
     const correction = overlapX / 2;
     cubeA.mesh.position.x += sign * correction;
@@ -791,7 +1126,6 @@ function resolveCollision(cubeA, cubeB) {
     cubeB.velocity.x = -Math.abs(cubeB.velocity.x) * sign;
 
   } else if (overlapY <= overlapX && overlapY <= overlapZ) {
-    // Colisão no eixo Y
     const sign = dy >= 0 ? 1 : -1;
     const correction = overlapY / 2;
     cubeA.mesh.position.y += sign * correction;
@@ -800,7 +1134,6 @@ function resolveCollision(cubeA, cubeB) {
     cubeB.velocity.y = -Math.abs(cubeB.velocity.y) * sign;
 
   } else {
-    // Colisão no eixo Z
     const sign = dz >= 0 ? 1 : -1;
     const correction = overlapZ / 2;
     cubeA.mesh.position.z += sign * correction;
@@ -808,16 +1141,26 @@ function resolveCollision(cubeA, cubeB) {
     cubeA.velocity.z =  Math.abs(cubeA.velocity.z) * sign;
     cubeB.velocity.z = -Math.abs(cubeB.velocity.z) * sign;
   }
+
+  // Velocidade relativa de impacto para ajustar o pitch do som
+  const relVel = cubeA.velocity.clone().sub(cubeB.velocity).length();
+
+  const impactPos = new THREE.Vector3()
+    .addVectors(cubeA.mesh.position, cubeB.mesh.position)
+    .multiplyScalar(0.5);
+
+  impactParticles.spawn(impactPos);
+  triggerImpactLight(impactPos);
+  triggerShockwave(impactPos);
+  playSound(relVel);
 }
 
-// --- HEATMAP DE COLISÕES ---
-// Incrementa o contador de toques do cubo e aplica a cor correspondente ao calor acumulado.
-// Gradiente: 0 = cor base | 1-2 = amarelo | 3-4 = laranja | 5-7 = vermelho | 8+ = magenta
+// HEATMAP DE COLISÕES
 const HEATMAP_COLORS = [
-  new THREE.Color(0xffee44), // 1-2 toques — amarelo
-  new THREE.Color(0xff8800), // 3-4 toques — laranja
-  new THREE.Color(0xff2a2a), // 5-7 toques — vermelho vivo
-  new THREE.Color(0xff00cc), // 8+  toques — magenta
+  new THREE.Color(0xffee44),
+  new THREE.Color(0xff8800),
+  new THREE.Color(0xff2a2a),
+  new THREE.Color(0xff00cc),
 ];
 
 function updateCubeHeatmap(cube) {
@@ -841,10 +1184,11 @@ function resetHeatmap() {
 }
 
 function detectCollisions() {
+  clearPairLines();
+
   cubes.forEach(c => {
     c.colliding = false;
     if (!c.dragging) {
-      // Em modo heatmap, não repõe a cor base a cada frame — ela persiste
       if (!isHeatmapEnabled) c.mesh.material.color.copy(c.baseColor);
       c.mesh.scale.lerp(new THREE.Vector3(1, 1, 1), 0.1);
     }
@@ -859,6 +1203,7 @@ function detectCollisions() {
   if (currentBroadPhase === 'grid' && spatialGrid) {
     spatialGrid.clear();
     cubes.forEach(cube => spatialGrid.insert(cube));
+    renderGridDebug();
 
     cubes.forEach(cube => {
       if (cube.dragging) return;
@@ -866,6 +1211,7 @@ function detectCollisions() {
       potentialCollisions.forEach(other => {
         if (other.id <= cube.id) return;
         comparisons++;
+        addPairLine(cube.mesh.position, other.mesh.position);
         if (intersectAABB(cube, other)) {
           localActiveCollisions++;
           newPairs.add(`${cube.id}-${other.id}`);
@@ -877,7 +1223,7 @@ function detectCollisions() {
     octreeSimulator.clear();
     cubes.forEach(cube => octreeSimulator.insert(cube));
 
-    const testedPairs = new Set(); // CORREÇÃO: Set de Pares para resolver a assimetria
+    const testedPairs = new Set();
 
     cubes.forEach(cube => {
       if (cube.dragging) return;
@@ -889,6 +1235,7 @@ function detectCollisions() {
         testedPairs.add(pairKey);
 
         comparisons++;
+        addPairLine(cube.mesh.position, other.mesh.position);
         if (intersectAABB(cube, other)) {
           localActiveCollisions++;
           newPairs.add(pairKey);
@@ -897,12 +1244,12 @@ function detectCollisions() {
       });
     });
   } else {
-    // Força Bruta O(n²)
     for (let i = 0; i < cubes.length; i++) {
       if (cubes[i].dragging) continue;
       for (let j = i + 1; j < cubes.length; j++) {
         if (cubes[j].dragging) continue;
         comparisons++;
+        addPairLine(cubes[i].mesh.position, cubes[j].mesh.position);
         if (intersectAABB(cubes[i], cubes[j])) {
           localActiveCollisions++;
           newPairs.add(`${cubes[i].id}-${cubes[j].id}`);
@@ -911,6 +1258,8 @@ function detectCollisions() {
       }
     }
   }
+
+  updatePairLinesBuffer();
 
   const end = performance.now();
   const pureComputeTime = end - start;
@@ -933,7 +1282,7 @@ function detectCollisions() {
 
     if (!currentCollidingPairs.has(key)) {
       collisionCount++;
-      playSound();
+      if (!isPhysicsEnabled) playSound(1.5);
       const badgeTextEl = document.getElementById('badgeText');
       if (badgeTextEl) {
         badgeTextEl.classList.remove('collision-bump');
@@ -945,6 +1294,20 @@ function detectCollisions() {
 
   currentCollidingPairs = newPairs;
   lastComparisonCount = comparisons;
+
+  const savingsEl = document.getElementById('savings-metric');
+  if (savingsEl) {
+    const totalN = cubes.length;
+    const baseComps = (totalN * (totalN - 1)) / 2;
+    if (currentBroadPhase === 'brute' || baseComps <= 0) {
+      savingsEl.textContent = 'ECONOMIA: 0%';
+      savingsEl.style.color = '#52525b';
+    } else {
+      const saved = Math.max(0, ((baseComps - comparisons) / baseComps) * 100);
+      savingsEl.textContent = `ECONOMIA: ${saved.toFixed(1)}%`;
+      savingsEl.style.color = saved > 0 ? '#00ffcc' : '#52525b';
+    }
+  }
 
   if (cubes.length !== lastLoggedN || currentBroadPhase !== lastLoggedAlgo) {
     const timestamp = new Date().toISOString();
@@ -1001,6 +1364,15 @@ function updatePhysics() {
     if (c.mesh.position.y > 20 - half) { c.velocity.y *= -0.95; c.mesh.position.y = 20 - half; }
     else if (c.mesh.position.y < half) { c.velocity.y *= -0.95; c.mesh.position.y = half; }
     if (Math.abs(c.mesh.position.z) > 20 - half) { c.velocity.z *= -0.95; c.mesh.position.z = Math.sign(c.mesh.position.z) * (20 - half); }
+
+    if (c.arrow) {
+      c.arrow.position.copy(c.mesh.position);
+      if (c.velocity.lengthSq() > 0.00001) {
+        c.arrow.setDirection(c.velocity.clone().normalize());
+      }
+      c.arrow.setLength(Math.min(c.velocity.length() * 2, 5));
+      c.arrow.visible = !c.dragging;
+    }
   });
 }
 
@@ -1074,7 +1446,7 @@ function populateBenchWidget(results, n) {
   widget.classList.add('visible');
 }
 
-// --- BENCHMARK AUTOMÁTICO ---
+// BENCHMARK AUTOMÁTICO
 function runBenchmark() {
   if (cubes.length === 0) return;
 
@@ -1113,7 +1485,7 @@ function runBenchmark() {
     try {
       const times = [];
       let comparisons = 0;
-      const grid = new SpatialGrid(10);
+      const grid = new SpatialGrid(2);
       for (let run = 0; run < RUNS; run++) {
         let comps = 0;
         grid.clear();
@@ -1144,7 +1516,7 @@ function runBenchmark() {
         cubes.forEach(c => oct.insert(c));
         const t0 = performance.now();
         
-        const testedPairs = new Set(); // CORREÇÃO: Set no Benchmark
+        const testedPairs = new Set();
 
         cubes.forEach(cube => {
           const potential = oct.getPotentialCollisions(cube);
@@ -1211,8 +1583,33 @@ function runBenchmark() {
 
 function animate() {
   requestAnimationFrame(animate);
+  const delta = clock.getDelta();
+
   updatePhysics();
   detectCollisions();
+  impactParticles.update(delta);
+
+  if (lightTimer > 0) {
+    lightTimer -= delta;
+    if (lightTimer <= 0) {
+      impactLight.intensity = 0;
+    }
+  }
+
+  for (let i = shockwaves.length - 1; i >= 0; i--) {
+    const sw = shockwaves[i];
+    sw.scale += 0.25;
+    sw.opacity -= 0.04;
+    sw.mesh.scale.set(sw.scale, sw.scale, 1);
+    sw.mesh.material.opacity = Math.max(0, sw.opacity);
+
+    if (sw.opacity <= 0) {
+      scene.remove(sw.mesh);
+      sw.mesh.geometry.dispose();
+      sw.mesh.material.dispose();
+      shockwaves.splice(i, 1);
+    }
+  }
 
   if (presentationMode) {
     presentOrbitAngle += 0.003;
@@ -1371,7 +1768,6 @@ document.getElementById('showGrid').addEventListener('change', e => scene.childr
 
 document.getElementById('heatmapToggle').addEventListener('change', e => {
   isHeatmapEnabled = e.target.checked;
-  // Ao desligar, repõe as cores base imediatamente (limpa o calor acumulado)
   if (!isHeatmapEnabled) resetHeatmap();
   playSound();
 });
@@ -1456,6 +1852,7 @@ document.getElementById('broadPhaseSelect').addEventListener('change', (e) => {
   playSound();
 
   setModeTheme(currentBroadPhase);
+  updateContextPanel(currentBroadPhase);
 
   controlPanel.classList.remove('mode-brute', 'mode-grid', 'mode-octree');
   controlPanel.classList.add('mode-' + currentBroadPhase);
@@ -1531,8 +1928,52 @@ window.addEventListener('keydown', (e) => {
   }
 });
 
-// Drag & Drop
-const raycaster = new THREE.Raycaster(), mouse = new THREE.Vector2(), plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), offset = new THREE.Vector3();
+// --- DRAG & DROP 3D COM CONTROLO DE ALTURA (EIXO Y) E HEIGHT DROP LINE ---
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+const plane = new THREE.Plane();
+const offset = new THREE.Vector3();
+
+// Linha pontilhada do vetor de força ao arrastar
+const forceLineGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
+const forceLineMat = new THREE.LineDashedMaterial({
+  color: 0xffdd44,
+  dashSize: 0.6,
+  gapSize: 0.3,
+  linewidth: 2
+});
+const forceLineMesh = new THREE.Line(forceLineGeo, forceLineMat);
+forceLineMesh.visible = false;
+scene.add(forceLineMesh);
+
+let hoveredCube = null;
+
+// Roda do rato para subir/descer a altura (Y) em tempo real enquanto segura o cubo
+window.addEventListener('wheel', e => {
+  if (!draggedCube) return;
+  e.preventDefault();
+
+  const step = e.deltaY < 0 ? 1.0 : -1.0;
+  const half = draggedCube.size / 2;
+
+  draggedCube.mesh.position.y = THREE.MathUtils.clamp(
+    draggedCube.mesh.position.y + step,
+    half,
+    20 - half
+  );
+
+  // Atualiza a guia de projeção até ao chão
+  const groundPoint = new THREE.Vector3(draggedCube.mesh.position.x, 0, draggedCube.mesh.position.z);
+  dropLineGeo.setFromPoints([draggedCube.mesh.position, groundPoint]);
+  dropLineGeo.attributes.position.needsUpdate = true;
+  dropLineMesh.computeLineDistances();
+  dropLineMesh.visible = true;
+
+  // Recalcula o plano orientado à câmara
+  const cameraDir = new THREE.Vector3();
+  camera.getWorldDirection(cameraDir);
+  plane.setFromNormalAndCoplanarPoint(cameraDir.negate(), draggedCube.mesh.position);
+}, { passive: false });
 
 renderer.domElement.addEventListener('pointerdown', e => {
   if (e.target.closest('#controlPanel') || e.target.closest('#chartPanel') || e.target.closest('button') || e.target.closest('#collisionBadge')) return;
@@ -1544,27 +1985,93 @@ renderer.domElement.addEventListener('pointerdown', e => {
   if (intersects.length > 0) {
     controls.enabled = false;
     draggedCube = intersects[0].object.userData;
-    draggedCube.dragging = true; draggedCube.velocity.set(0,0,0);
-    plane.constant = draggedCube.mesh.position.y;
-    raycaster.ray.intersectPlane(plane, offset);
-    offset.sub(draggedCube.mesh.position);
+    draggedCube.dragging = true; 
+    draggedCube.velocity.set(0,0,0);
+
+    const cameraDir = new THREE.Vector3();
+    camera.getWorldDirection(cameraDir);
+    plane.setFromNormalAndCoplanarPoint(cameraDir.negate(), draggedCube.mesh.position);
+
+    const intersectPoint = new THREE.Vector3();
+    if (raycaster.ray.intersectPlane(plane, intersectPoint)) {
+      offset.copy(intersectPoint).sub(draggedCube.mesh.position);
+    }
+
     draggedCube.mesh.material.color.copy(DRAG_COLOR);
+    hoverBoxHelper.setFromObject(draggedCube.mesh);
+    hoverBoxHelper.visible = true;
+
+    // Ativa a linha de guia vertical
+    const groundPoint = new THREE.Vector3(draggedCube.mesh.position.x, 0, draggedCube.mesh.position.z);
+    dropLineGeo.setFromPoints([draggedCube.mesh.position, groundPoint]);
+    dropLineGeo.attributes.position.needsUpdate = true;
+    dropLineMesh.computeLineDistances();
+    dropLineMesh.visible = true;
   }
 });
 
 renderer.domElement.addEventListener('pointermove', e => {
-  if (!draggedCube) return;
   mouse.set((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1);
   raycaster.setFromCamera(mouse, camera);
-  const intersectPoint = new THREE.Vector3();
-  raycaster.ray.intersectPlane(plane, intersectPoint);
-  draggedCube.mesh.position.copy(intersectPoint.sub(offset));
+
+  if (!draggedCube) {
+    const intersects = raycaster.intersectObjects(cubes.map(c => c.mesh));
+    if (intersects.length > 0) {
+      const c = intersects[0].object.userData;
+      if (hoveredCube !== c) {
+        if (hoveredCube && !hoveredCube.colliding) hoveredCube.mesh.material.color.copy(hoveredCube.baseColor);
+        hoveredCube = c;
+        document.body.style.cursor = 'pointer';
+      }
+      if (!c.colliding) c.mesh.material.color.lerp(new THREE.Color(0xffffff), 0.3);
+      hoverBoxHelper.setFromObject(hoveredCube.mesh);
+      hoverBoxHelper.visible = true;
+    } else {
+      if (hoveredCube && !hoveredCube.colliding) hoveredCube.mesh.material.color.copy(hoveredCube.baseColor);
+      hoveredCube = null;
+      hoverBoxHelper.visible = false;
+      document.body.style.cursor = 'default';
+    }
+  } else {
+    const intersectPoint = new THREE.Vector3();
+    if (raycaster.ray.intersectPlane(plane, intersectPoint)) {
+      const targetPos = intersectPoint.sub(offset);
+
+      const half = draggedCube.size / 2;
+      targetPos.x = THREE.MathUtils.clamp(targetPos.x, -20 + half, 20 - half);
+      targetPos.y = THREE.MathUtils.clamp(targetPos.y, half, 20 - half);
+      targetPos.z = THREE.MathUtils.clamp(targetPos.z, -20 + half, 20 - half);
+
+      forceLineGeo.setFromPoints([draggedCube.mesh.position, targetPos]);
+      forceLineGeo.attributes.position.needsUpdate = true;
+      forceLineMesh.computeLineDistances();
+      forceLineMesh.visible = true;
+
+      draggedCube.mesh.position.copy(targetPos);
+      hoverBoxHelper.setFromObject(draggedCube.mesh);
+      hoverBoxHelper.visible = true;
+
+      // Atualiza a linha de projeção vertical até ao chão
+      const groundPoint = new THREE.Vector3(targetPos.x, 0, targetPos.z);
+      dropLineGeo.setFromPoints([targetPos, groundPoint]);
+      dropLineGeo.attributes.position.needsUpdate = true;
+      dropLineMesh.computeLineDistances();
+      dropLineMesh.visible = true;
+    }
+  }
 });
 
 const endDrag = () => {
   if (!draggedCube) return;
+  forceLineMesh.visible = false;
+  hoverBoxHelper.visible = false;
+  dropLineMesh.visible = false;
   draggedCube.dragging = false;
-  draggedCube.velocity.set((Math.random()-0.5)*parseFloat(speedSlider.value), (Math.random()-0.5)*parseFloat(speedSlider.value), (Math.random()-0.5)*parseFloat(speedSlider.value));
+  draggedCube.velocity.set(
+    (Math.random() - 0.5) * parseFloat(speedSlider.value),
+    (Math.random() - 0.5) * parseFloat(speedSlider.value),
+    (Math.random() - 0.5) * parseFloat(speedSlider.value)
+  );
   draggedCube = null;
   controls.enabled = true;
 };
@@ -1581,6 +2088,7 @@ currentBroadPhase = 'brute';
 
 initCubes();
 startTyping(pseudoCodeBrute);
+updateContextPanel('brute');
 animate();
 setModeTheme('brute');
 
