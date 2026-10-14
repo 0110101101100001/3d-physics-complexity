@@ -10,8 +10,7 @@
 
 ## 📸 Screenshot
 
-> _Adicione aqui um screenshot da simulação em execução._  
-> Sugestão: captura com o painel de controlos aberto, o gráfico assintótico visível e alguns cubos em colisão.
+![Simulação 3D a correr com Octree](screenshot.png)
 
 ---
 
