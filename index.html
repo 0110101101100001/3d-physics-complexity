@@ -3,56 +3,199 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Deteção de Colisão 3D - O(n²)</title>
-  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Inter:wght@300;400;500&family=Playfair+Display:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+  <title>Detecção de Colisão 3D — O(n²) vs O(n)</title>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Inter:wght@300;400;500;600;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-  <!-- Contador Total -->
-  <div id="collisionBadge">Total: 0</div>
+  <!-- Grid synthwave animada -->
+  <div id="synthGrid"></div>
 
-  <!-- Botão de Minimizar (Canto Inferior Esquerdo) -->
-  <button id="minimizeBtn" title="Mostrar/Esconder Controlos">⚙ Controlos</button>
+  <!-- LANDING PAGE -->
+  <div id="landingPage">
+    <div class="landing-content">
 
-  <!-- Painel Flutuante Central -->
-  <div id="controlPanel">
+      <div class="landing-badge landing-anim" style="--delay: 0s">
+        <span class="badge-line"></span>
+        <span class="badge-dot"></span>
+        <span class="badge-label">TRABALHO ACADÉMICO // FÍSICA 3D</span>
+      </div>
+
+      <h1 class="landing-title landing-anim" style="--delay: 0.18s">
+        Detecção de Colisão em 3D:<br>
+        Prova Matemática de <span class="highlight">Eficiência</span>
+      </h1>
+
+      <div class="landing-subtitle-block landing-anim" style="--delay: 0.34s">
+        <p class="landing-subtitle">
+          Ganho de eficiência do uso de estruturas espaciais como Octrees em simulações tridimensionais — demonstrado com telemetria em tempo real.
+        </p>
+        <p class="landing-subtitle-secondary">
+          Cada frame executa o algoritmo <strong>AABB</strong> sobre todos os objetos da cena. A escolha da estratégia de <em>Broad-Phase</em> define se o motor escala linearmente ou colapsa com o aumento de N.
+        </p>
+      </div>
+
+      <div class="landing-metrics landing-anim" style="--delay: 0.5s">
+        <span class="metric-pill pill-red">O(n²) <span class="pill-label">Força Bruta</span></span>
+        <span class="metric-pill-sep">·</span>
+        <span class="metric-pill pill-purple">O(n log n) <span class="pill-label">Octree</span></span>
+        <span class="metric-pill-sep">·</span>
+        <span class="metric-pill pill-blue">O(n) <span class="pill-label">Grade Espacial</span></span>
+      </div>
+
+      <div class="landing-cta-row landing-anim" style="--delay: 0.66s">
+        <button id="startBtn" class="cta-btn">
+          Iniciar Simulação
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M5 12h14M12 5l7 7-7 7"/>
+          </svg>
+        </button>
+        <p class="landing-counter">
+          <span class="counter-item"><span class="counter-num" data-target="3">0</span> estratégias</span>
+          <span class="counter-sep">·</span>
+          <span class="counter-item"><span class="counter-num" data-target="150">0</span> objetos máx.</span>
+          <span class="counter-sep">·</span>
+          <span class="counter-item">telemetria <span class="counter-live">em tempo real</span></span>
+        </p>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- TOP BAR -->
+  <header id="topBar">
+    <div class="topbar-left">
+      <span class="topbar-dot"></span>
+      <span class="topbar-logo">PHYSICS_SIM <span class="topbar-version">v2.6</span></span>
+    </div>
+
+    <div class="topbar-center">
+      <div class="topbar-metric">
+        <span class="metric-label">OBJETOS</span>
+        <span class="metric-value" id="tbObjects">—</span>
+      </div>
+      <div class="topbar-sep">|</div>
+      <div class="topbar-metric">
+        <span class="metric-label">COLISÕES</span>
+        <span class="metric-value" id="tbCollisions">
+          <span id="badgeIndicator"></span>
+          <span id="badgeText">0</span>
+        </span>
+      </div>
+      <div class="topbar-sep">|</div>
+      <div class="topbar-metric">
+        <span class="metric-label">MODO</span>
+        <span class="metric-value accent" id="tbMode">Bruta O(n²)</span>
+      </div>
+    </div>
+
+    <div class="topbar-right">
+      <span id="stressBadge"><span class="stress-badge-dot"></span>STRESS</span>
+      <button id="benchTopbarBtn" class="topbar-btn" title="Benchmark [B]">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+        BENCHMARK
+      </button>
+      <button id="presentBtn" class="topbar-btn" title="Modo Apresentação [P]">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+        APRESENTAR
+      </button>
+      <button id="soundBtn" class="topbar-btn" title="Som">
+        <svg id="soundIconOn" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+        <svg id="soundIconOff" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="display:none"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>
+        <span id="soundLabel">SOM</span>
+      </button>
+    </div>
+  </header>
+
+  <div id="collisionBadge" style="display:none;">
+    <span></span>
+  </div>
+
+  <div id="leftButtonGroup">
+    <button id="toggleChartBtn" title="Mostrar/Esconder Gráfico">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+      Gráfico
+    </button>
+    <button id="minimizeBtn" title="Mostrar/Esconder Menu">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      Menu
+    </button>
+  </div>
+
+  <div id="controlPanel" class="panel-hidden">
     <div id="panelContent">
-      <div class="panelRow">
-        <!-- Coluna 1: Teoria -->
-        <div class="panelCol">
-          <h3>DETEÇÃO DE COLISÃO</h3>
-          <p><strong>CONTEXTO:</strong> Otimização de motores físicos para simulações 3D.</p>
-          <p><strong>COMPLEXIDADE:</strong> Pior Caso: O(n²) (Verificação ingénua).</p>
-          <p><strong>OP. BÁSICA:</strong> Teste de sobreposição AABB nos eixos X, Y e Z.</p>
+      <div class="bento-grid">
+
+        <div class="bento-cell bento-theory">
+          <div class="bento-label">01 // CONTEXTO</div>
+          <p><strong>Algoritmo:</strong> AABB — Axis-Aligned Bounding Box</p>
+          <p><strong>Pior Caso:</strong> O(n²) — verificação por força bruta</p>
+          <p><strong>Op. Básica:</strong> Sobreposição nos eixos X, Y e Z</p>
         </div>
 
-        <!-- Coluna 2: Controlos -->
-        <div class="panelCol">
+        <div class="bento-cell bento-sim">
+          <div class="bento-label">02 // SIMULAÇÃO</div>
           <div class="control-group">
-            <label for="cubeCount">Número de cubos</label>
-            <div style="display:flex; align-items:center; gap:6px;">
-              <input type="range" id="cubeCount" min="2" max="20" value="8">
-              <input type="number" id="cubeCountInput" min="2" max="20" value="8" style="width:50px;">
+            <label for="cubeCount">Cubos <span class="label-value" id="cubeCountDisplay">8</span></label>
+            <div class="input-row">
+              <input type="range" id="cubeCount" min="2" max="20" value="8" autocomplete="off">
+              <input type="number" id="cubeCountInput" min="2" max="20" value="8" autocomplete="off">
             </div>
           </div>
           <div class="control-group">
             <label for="speed">Velocidade</label>
-            <input type="range" id="speed" min="0.2" max="2" step="0.1" value="0.8">
+            <input type="range" id="speed" min="0.2" max="2" step="0.1" value="0.8" autocomplete="off">
           </div>
           <div class="control-group">
-            <label><input type="checkbox" id="showGrid" checked> Mostrar grade</label>
+            <label for="broadPhaseSelect">Estratégia Broad-Phase</label>
+            <select id="broadPhaseSelect" autocomplete="off">
+              <option value="brute">Força Bruta O(n²)</option>
+              <option value="grid">Grade Espacial Uniforme O(n)</option>
+              <option value="octree">Particionamento Hierárquico O(n log n)</option>
+            </select>
           </div>
-          <div class="control-group" style="display:flex; gap:8px;">
-            <button id="toggleBtn" class="btn">PAUSAR</button>
-            <button id="resetBtn" class="btn btn-secondary">REINICIAR</button>
-            <button id="theoryBtn" class="btn">TEORIA</button>
+          <div class="control-group checkbox-row">
+            <label class="checkbox-label">
+              <input type="checkbox" id="showGrid" checked autocomplete="off">
+              <span>Grade 3D</span>
+            </label>
           </div>
         </div>
 
-        <!-- Coluna 3: Pseudocódigo -->
-        <div class="panelCol terminal">
-          <pre>&#62; FUNCAO intersectarAABB(A, B):
+        <div class="bento-cell bento-actions">
+          <div class="bento-label">03 // AÇÕES</div>
+          <div class="btn-grid">
+            <button id="toggleBtn" class="btn">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+              PAUSAR
+            </button>
+            <button id="resetBtn" class="btn">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+              REINICIAR
+            </button>
+            <button id="wireframeBtn" class="btn">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+              WIREFRAME
+            </button>
+            <button id="theoryBtn" class="btn">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+              TEORIA
+            </button>
+            <button id="exportCsvBtn" class="btn btn-wide">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="12 17 9 14 12 11"/></svg>
+              EXPORTAR CSV (HISTÓRICO COMPLETO)
+            </button>
+            <button id="stressBtn" class="btn btn-wide">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+              STRESS TEST (150)
+            </button>
+          </div>
+        </div>
+
+        <div class="bento-cell bento-terminal terminal">
+          <div class="bento-label">04 // PSEUDOCÓDIGO</div>
+          <pre id="pseudoCode">&#62; FUNCAO intersectarAABB(A, B):
 &#62;   dx = abs(A.x - B.x)
 &#62;   dy = abs(A.y - B.y)
 &#62;   dz = abs(A.z - B.z)
@@ -62,43 +205,171 @@
 &#62;    E dz &lt; (A.size + B.size)/2:
 &#62;      RETORNAR VERDADEIRO
 &#62;   RETORNAR FALSO</pre>
-          <div><span class="blink">_</span></div>
+          <div class="terminal-cursor"><span class="blink">_</span></div>
         </div>
+
+      </div>
+
+      <div class="shortcuts-bar">
+        <span><kbd>Espaço</kbd> Pausar</span>
+        <span><kbd>R</kbd> Reiniciar</span>
+        <span><kbd>S</kbd> Stress</span>
+        <span><kbd>W</kbd> Wireframe</span>
+        <span><kbd>P</kbd> Apresentar</span>
+        <span><kbd>B</kbd> Benchmark</span>
       </div>
     </div>
   </div>
 
-  <!-- Modal de Teoria Editorial -->
-  <div id="theoryModal" class="hidden">
-    <div class="modal-content">
-      <button id="closeTheoryBtn">X FECHAR</button>
-      <div class="theory-editorial">
-        <div class="theory-block">
-          <div class="tag">01 // CONTEXTO</div>
-          <h4>Contextualização do Problema</h4>
-          <p>Otimização de motores físicos para videojogos e simulações 3D. Em cenários densos, testar colisões cegas consome rapidamente o CPU, tornando essencial métodos de rejeição rápida (Broad Phase).</p>
-        </div>
-        <div class="theory-block">
-          <div class="tag">02 // ALGORITMO</div>
-          <h4>Descrição do Algoritmo</h4>
-          <p>O algoritmo Axis-Aligned Bounding Box (AABB) delimita cada objeto com um cubo alinhado aos eixos. A colisão é detetada verificando simultaneamente a sobreposição de distâncias nos eixos X, Y e Z.</p>
-        </div>
-        <div class="theory-block">
-          <div class="tag">03 // MAPEAMENTO</div>
-          <h4>Mapeamento de Operações</h4>
-          <p>A operação básica é o <strong>teste lógico de sobreposição AABB</strong>. Para N objetos, numa abordagem de força bruta, a operação é executada para todos os pares possíveis na cena.</p>
-        </div>
-        <div class="theory-block">
-          <div class="tag">04 // PROVA MATEMÁTICA</div>
-          <h4>Análise e Prova Matemática</h4>
-          <p>• Melhor Caso (Ω): O(1) se otimizado com particionamento espacial.<br>• Pior Caso (O): O(n²). A contagem de verificações na matriz de N elementos é resolvida pela Progressão Aritmética: (N*(N-1))/2.</p>
-        </div>
+  <div id="chartPanel" class="chart-hidden">
+    <div class="chart-title">CURVAS ASSINTÓTICAS COMPARATIVAS</div>
+    <canvas id="perfChart" width="280" height="200"></canvas>
+    <div id="chartLegend">
+      <div class="legend-item">
+        <span class="legend-color" style="background: #ff7139;"></span>
+        <span class="legend-label">Força Bruta O(n²)</span>
+      </div>
+      <div class="legend-item">
+        <span class="legend-color" style="background: #00ddff;"></span>
+        <span class="legend-label">Grade Espacial O(n)</span>
+      </div>
+      <div class="legend-item">
+        <span class="legend-color" style="background: #7b2cbf;"></span>
+        <span class="legend-label">Octree O(n log n)</span>
       </div>
     </div>
+    <div id="chartStats">
+      <div class="stat-row">
+        <span class="stat-label">N</span>
+        <span class="stat-value" id="statN">—</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">ALGO</span>
+        <span class="stat-value" id="statAlgo">Força Bruta O(n²)</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">COMP.</span>
+        <span class="stat-value" id="statComp">—</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">TEMPO</span>
+        <span class="stat-value accent" id="statTime">—</span>
+      </div>
+    </div>
+  </div>
+
+  <div id="theoryModal" class="hidden">
+    <div class="modal-content">
+      <button id="closeTheoryBtn">✕ FECHAR</button>
+      <div class="theory-editorial">
+
+        <div class="theory-block">
+          <div class="tag">01 // O PROBLEMA (BROAD-PHASE)</div>
+          <h4>Motores de Física e AABB</h4>
+          <p>Em simulações 3D densas, testar colisões cegas consome rapidamente o CPU. Usamos <strong>AABB (Axis-Aligned Bounding Box)</strong> como a operação básica de intersecção nos eixos X, Y e Z. O desafio da fase <em>Broad-Phase</em> é reduzir matematicamente a quantidade destas operações necessárias por frame.</p>
+        </div>
+
+        <div class="theory-block">
+          <div class="tag">02 // PIOR CASO</div>
+          <h4>Força Bruta O(n²)</h4>
+          <p>A abordagem ingénua. Testa as fronteiras de todos os objetos contra todos os outros objetos na cena. O número exato de comparações é governado pela Progressão Aritmética <strong>(N × (N - 1)) / 2</strong>. Embora tenha <em>overhead</em> (custo de inicialização) nulo, o seu crescimento quadrático torna-a insustentável para grandes volumes.</p>
+        </div>
+
+        <div class="theory-block">
+          <div class="tag">03 // ABORDAGEM LINEAR</div>
+          <h4>Grade Espacial Uniforme O(n)</h4>
+          <p>Mapeamento do espaço tridimensional em células de tamanho fixo. O algoritmo atinge a complexidade ótima de <strong>O(n)</strong> mapeando os objetos numa estrutura de Hash e limitando os testes de AABB apenas aos vizinhos locais. É extremamente rápido, mas vulnerável ao pior caso O(n²) se os objetos se aglomerarem todos na mesma célula.</p>
+        </div>
+
+        <div class="theory-block">
+          <div class="tag">04 // ABORDAGEM LOG-LINEAR</div>
+          <h4>Particionamento Octree O(n log n)</h4>
+          <p>Estrutura hierárquica que subdivide o espaço 3D em 8 octantes recursivamente. Usa a abordagem de <strong>Retenção no Nodo Pai</strong>: se a <em>Box3</em> de um objeto não couber inteiramente num filho, o objeto fica no nodo atual em vez de ser duplicado — eliminando o <em>Straddling Problem</em>. No <em>query</em>, os candidatos dos nodos ancestrais são sempre propagados, garantindo que toques superficiais nas fronteiras são detetados com <code>intersectsBox</code>.</p>
+        </div>
+
+        <div class="theory-block">
+          <div class="tag">05 // CONSTANTES OCULTAS</div>
+          <h4>Overhead e Ponto de Interseção</h4>
+          <p>Na notação Big-O, ignoramos constantes ocultas. Contudo, estruturas avançadas (Grade e Octree) exigem tempo de CPU para serem construídas (alocação e subdivisão) a cada frame. Para valores de <strong>N</strong> muito pequenos, esse <em>overhead</em> faz com que a Força Bruta seja temporariamente mais rápida, até o gráfico cruzar o <strong>Ponto de Interseção</strong>.</p>
+        </div>
+
+        <div class="theory-block">
+          <div class="tag">06 // CONCLUSÃO</div>
+          <h4>Validação da Telemetria</h4>
+          <p>A simulação valida visualmente a teoria matemática. No gráfico, a curva exponencial da Força Bruta é inevitavelmente superada. A escolha do algoritmo ideal não depende de um vencedor absoluto, mas sim da relação entre a densidade espacial e a grandeza de <strong>N</strong> na aplicação real.</p>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <div id="benchWidget">
+    <div class="bench-widget-header">
+      <span class="bench-widget-title">BENCHMARK</span>
+      <span id="benchWidgetN" class="bench-widget-n">—</span>
+      <span class="bench-widget-info" tabindex="0" aria-label="Legenda das métricas">
+        ⓘ
+        <span class="bench-widget-tooltip">
+          <strong>TEMPO MÉD.</strong> — média aparada de 20 execuções do algoritmo de deteção, medida com <code>performance.now()</code>. Exclui os 15% mais lentos e mais rápidos para reduzir ruído de GC.<br><br>
+          <strong>COMP.</strong> — número de pares de objetos testados com AABB por frame. Força Bruta faz (N×(N-1))/2 testes; Grade e Octree reduzem esse número via estruturas espaciais.
+        </span>
+      </span>
+      <button id="benchWidgetClose" title="Fechar">✕</button>
+    </div>
+    <div id="benchWidgetRows"></div>
+    <button id="benchWidgetRerun" class="bench-widget-rerun">↻ re-executar</button>
+  </div>
+
+  <div id="benchmarkModal" class="hidden">
+    <div class="modal-content">
+      <button id="closeBenchmarkBtn">✕ FECHAR</button>
+      <div class="benchmark-editorial">
+        <div class="benchmark-header">
+          <div class="tag" style="font-family:'Fira Code',monospace;font-size:0.68rem;letter-spacing:0.08em;margin-bottom:16px;display:inline-block;padding:3px 8px;border-radius:4px;border:1px solid var(--mode-color-dim);background:var(--mode-color-subtle);color:var(--mode-color);">BENCHMARK // COMPARAÇÃO DE ALGORITMOS</div>
+          <p style="font-size:0.82rem;color:#71717a;margin-bottom:20px;">Cada algoritmo foi executado 20× sobre os <span id="benchN" style="color:var(--text-main);font-family:'Fira Code',monospace;"></span> cubos actuais. Média aparada (15% topo e base removidos).</p>
+        </div>
+        <table id="benchmarkTable" style="width:100%;border-collapse:collapse;font-family:'Fira Code',monospace;font-size:0.82rem;">
+          <thead>
+            <tr style="border-bottom:1px solid rgba(255,255,255,0.1);">
+              <th style="text-align:left;padding:8px 12px;color:#52525b;font-size:0.65rem;letter-spacing:0.08em;font-weight:500;">ALGORITMO</th>
+              <th style="text-align:right;padding:8px 12px;color:#52525b;font-size:0.65rem;letter-spacing:0.08em;font-weight:500;">COMPARAÇÕES</th>
+              <th style="text-align:right;padding:8px 12px;color:#52525b;font-size:0.65rem;letter-spacing:0.08em;font-weight:500;">TEMPO MÉD.</th>
+              <th style="text-align:right;padding:8px 12px;color:#52525b;font-size:0.65rem;letter-spacing:0.08em;font-weight:500;">RAZÃO</th>
+            </tr>
+          </thead>
+          <tbody id="benchmarkTbody">
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div id="stressFlicker"></div>
+
+  <div id="presentOverlay">
+    <div id="presentHud">
+      <div id="presentTitle">PHYSICS_SIM</div>
+      <div id="presentMeta">
+        <span id="presentMode">—</span>
+        <span class="present-sep">·</span>
+        <span id="presentN">—</span>
+        <span class="present-sep">·</span>
+        <span id="presentComp">0 comp.</span>
+        <span class="present-sep">·</span>
+        <span id="presentCollisions">0 colisões</span>
+      </div>
+    </div>
+    <div id="presentEscHint"><kbd>Esc</kbd> ou <kbd>P</kbd> para sair</div>
   </div>
 
   <!-- Scripts -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/Pass.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
   <script src="main.js"></script>
 </body>
 </html>
