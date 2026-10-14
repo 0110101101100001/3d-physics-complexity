@@ -1269,7 +1269,8 @@ cubeCountNumber.addEventListener('change', e => {
 });
 document.getElementById('toggleBtn').addEventListener('click', e => {
   simPaused = !simPaused;
-  e.target.textContent = simPaused ? 'RETOMAR' : 'PAUSAR';
+  const btn = document.getElementById('toggleBtn');
+  btn.lastChild.textContent = simPaused ? ' RETOMAR' : ' PAUSAR';
   chartPanel.classList.toggle('sim-paused', simPaused);
   document.getElementById('chartStats').classList.toggle('sim-paused', simPaused);
   playSound();
@@ -1286,13 +1287,19 @@ document.getElementById('showGrid').addEventListener('change', e => scene.childr
 
 minimizeBtn.addEventListener('click', () => {
   controlPanel.classList.toggle('panel-hidden');
-  minimizeBtn.style.background = controlPanel.classList.contains('panel-hidden') ? 'var(--sidebar-bg)' : 'var(--accent)';
+  const active = !controlPanel.classList.contains('panel-hidden');
+  minimizeBtn.style.background = active ? 'var(--mode-color-glow)' : '';
+  minimizeBtn.style.borderColor = active ? 'var(--mode-color-dim)' : '';
+  minimizeBtn.style.color = active ? 'var(--mode-color)' : '';
   playSound();
 });
 
 toggleChartBtn.addEventListener('click', () => {
   chartPanel.classList.toggle('chart-hidden');
-  toggleChartBtn.style.background = chartPanel.classList.contains('chart-hidden') ? 'var(--sidebar-bg)' : 'var(--accent)';
+  const active = !chartPanel.classList.contains('chart-hidden');
+  toggleChartBtn.style.background = active ? 'var(--mode-color-glow)' : '';
+  toggleChartBtn.style.borderColor = active ? 'var(--mode-color-dim)' : '';
+  toggleChartBtn.style.color = active ? 'var(--mode-color)' : '';
   playSound();
 });
 

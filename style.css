@@ -212,43 +212,6 @@ canvas:not(#perfChart) {
 }
 
 /* ═══════════════════════════════════════
-   LEFT BUTTON GROUP
-═══════════════════════════════════════ */
-#leftButtonGroup {
-  position: fixed;
-  left: 20px;
-  bottom: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  z-index: 1000;
-  pointer-events: auto;
-}
-#minimizeBtn, #toggleChartBtn {
-  background: #2b2a33;
-  border: 1px solid rgba(255,255,255,0.08);
-  color: var(--text-main);
-  border-radius: 10px;
-  padding: 10px 16px;
-  width: 120px;
-  cursor: pointer;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.35);
-  font-weight: 500;
-  font-size: 0.85rem;
-  transition: background 0.2s, border-color 0.2s, box-shadow 0.2s;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-}
-#minimizeBtn svg, #toggleChartBtn svg { flex-shrink: 0; }
-#minimizeBtn:hover, #toggleChartBtn:hover {
-  background: #3a3846;
-  border-color: rgba(255,255,255,0.14);
-  box-shadow: 0 6px 18px rgba(0,0,0,0.45);
-}
-
-/* ═══════════════════════════════════════
    CONTROL PANEL — BENTO GRID
 ═══════════════════════════════════════ */
 #controlPanel {
@@ -256,82 +219,108 @@ canvas:not(#perfChart) {
   left: 50%;
   bottom: 20px;
   width: 95%;
-  max-width: 1040px;
+  max-width: 1060px;
   transform: translateX(-50%);
-  background: rgba(27, 27, 31, 0.82);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
-  border: 1px solid rgba(255,255,255,0.09);
-  border-radius: 14px;
-  padding: 14px;
-  box-shadow: 0 24px 60px rgba(0,0,0,0.55);
+  background: rgba(20, 20, 23, 0.90);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-top: 1px solid rgba(255,255,255,0.11);
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow:
+    0 32px 64px rgba(0,0,0,0.65),
+    0 0 0 1px rgba(255,255,255,0.04) inset,
+    0 0 40px var(--mode-color-subtle) inset;
   z-index: 1000;
   pointer-events: auto;
   transition: opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1),
-              transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+              transform 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+              box-shadow 0.4s ease;
 }
 #controlPanel.panel-hidden {
   opacity: 0;
   pointer-events: none;
-  transform: translate(-50%, 16px);
+  transform: translate(-50%, 20px);
 }
 
 /* Bento grid — 4 células */
 .bento-grid {
   display: grid;
-  grid-template-columns: 1fr 1.2fr 1.1fr 1.3fr;
+  grid-template-columns: 0.85fr 1.15fr 1.05fr 1.25fr;
   gap: 10px;
   align-items: stretch;
 }
 
 .bento-cell {
-  background: rgba(255,255,255,0.03);
-  border: 1px solid rgba(255,255,255,0.07);
+  background: rgba(255,255,255,0.025);
+  border: 1px solid rgba(255,255,255,0.06);
   border-left: 2px solid var(--mode-color-dim);
-  border-radius: 10px;
-  padding: 12px 14px;
+  border-radius: 12px;
+  padding: 14px 16px;
   display: flex;
   flex-direction: column;
-  gap: 7px;
-  transition: border-color 0.25s, box-shadow 0.25s;
+  gap: 8px;
+  transition: border-left-color 0.3s ease, box-shadow 0.3s ease, background 0.3s ease;
 }
 .bento-cell:hover {
-  border-color: rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.04);
   border-left-color: var(--mode-color);
-  box-shadow: 0 0 0 1px var(--mode-color-subtle) inset;
+  box-shadow: 0 0 0 1px var(--mode-color-subtle) inset,
+              0 4px 16px rgba(0,0,0,0.25);
 }
 
 /* Destaque no módulo de simulação */
 .bento-sim {
   border-left-color: var(--mode-color);
-  box-shadow: 0 0 18px var(--mode-color-glow), inset 0 0 12px var(--mode-color-subtle);
+  box-shadow:
+    0 0 24px var(--mode-color-glow),
+    inset 0 0 16px var(--mode-color-subtle);
 }
 
+/* Label — numeração de seção */
 .bento-label {
   font-family: 'Fira Code', monospace;
-  font-size: 0.62rem;
+  font-size: 0.60rem;
   color: var(--mode-color);
-  letter-spacing: 0.08em;
-  margin-bottom: 2px;
-  opacity: 0.85;
+  letter-spacing: 0.10em;
+  opacity: 0.7;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.bento-label::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--mode-color-dim);
+  opacity: 0.5;
 }
 
 /* Coluna teoria */
 .bento-theory p {
-  font-size: 0.75rem;
-  color: var(--text-muted);
-  line-height: 1.5;
+  font-size: 0.73rem;
+  color: #71717a;
+  line-height: 1.6;
+  font-family: 'Fira Code', monospace;
 }
 .bento-theory p strong {
-  color: var(--text-main);
+  color: var(--mode-color);
   font-weight: 500;
+  font-family: 'Fira Code', monospace;
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
 }
 
 /* Coluna simulação */
-.bento-sim .control-group { display: flex; flex-direction: column; gap: 4px; }
+.bento-sim .control-group { display: flex; flex-direction: column; gap: 5px; }
 .bento-sim label {
-  font-size: 0.73rem;
-  color: var(--text-muted);
+  font-family: 'Fira Code', monospace;
+  font-size: 0.65rem;
+  color: #71717a;
+  letter-spacing: 0.04em;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -339,7 +328,11 @@ canvas:not(#perfChart) {
 .label-value {
   color: var(--mode-color);
   font-family: 'Fira Code', monospace;
-  font-size: 0.7rem;
+  font-size: 0.68rem;
+  background: var(--mode-color-subtle);
+  padding: 1px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--mode-color-dim);
 }
 .input-row {
   display: flex;
@@ -354,10 +347,13 @@ canvas:not(#perfChart) {
 .checkbox-label {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 0.73rem;
-  color: var(--text-muted);
+  gap: 8px;
+  font-family: 'Fira Code', monospace;
+  font-size: 0.65rem;
+  color: #71717a;
+  letter-spacing: 0.04em;
   cursor: pointer;
+  transition: color 0.2s;
 }
 .checkbox-label:hover { color: var(--text-main); }
 
@@ -373,29 +369,35 @@ canvas:not(#perfChart) {
 /* Terminal */
 .bento-terminal { justify-content: space-between; }
 .bento-terminal pre#pseudoCode {
-  font-size: 0.67rem;
-  color: var(--text-muted);
-  line-height: 1.55;
+  font-size: 0.64rem;
+  color: #52525b;
+  line-height: 1.6;
   white-space: pre-wrap;
   flex: 1;
 }
+.bento-terminal pre#pseudoCode .typed-char {
+  color: #71717a;
+}
 .terminal-cursor {
   font-family: 'Fira Code', monospace;
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   color: var(--mode-color);
   margin-top: 4px;
+  opacity: 0.7;
 }
 
 /* Atalhos */
 .shortcuts-bar {
   display: flex;
-  gap: 16px;
-  margin-top: 10px;
-  padding-top: 8px;
-  border-top: 1px solid rgba(255,255,255,0.05);
+  gap: 12px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255,255,255,0.04);
   font-family: 'Fira Code', monospace;
-  font-size: 0.62rem;
-  color: #a1a1aa;
+  font-size: 0.60rem;
+  color: #3f3f46;
+  letter-spacing: 0.04em;
+  flex-wrap: wrap;
 }
 
 /* ═══════════════════════════════════════
@@ -403,8 +405,8 @@ canvas:not(#perfChart) {
 ═══════════════════════════════════════ */
 input[type="range"] {
   width: 100%;
-  height: 3px;
-  background: rgba(255,255,255,0.12);
+  height: 2px;
+  background: rgba(255,255,255,0.08);
   border-radius: 2px;
   -webkit-appearance: none;
   cursor: pointer;
@@ -413,34 +415,35 @@ input[type="range"] {
 input[type="range"]:hover { background: var(--mode-color-dim); }
 input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none;
-  width: 13px; height: 13px;
+  width: 12px; height: 12px;
   background: var(--text-main);
   border-radius: 50%;
   cursor: pointer;
-  transition: background 0.2s, transform 0.15s;
-  box-shadow: 0 0 0 2px rgba(255,113,57,0);
+  transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
 }
 input[type="range"]:hover::-webkit-slider-thumb {
   background: var(--mode-color);
-  transform: scale(1.15);
-  box-shadow: 0 0 0 3px var(--mode-color-subtle);
+  transform: scale(1.2);
+  box-shadow: 0 0 0 4px var(--mode-color-subtle);
 }
 input[type="number"] {
-  background: rgba(0,0,0,0.3);
-  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(0,0,0,0.35);
+  border: 1px solid rgba(255,255,255,0.08);
   color: var(--text-main);
   padding: 4px 6px;
-  border-radius: 5px;
-  font-size: 0.78rem;
+  border-radius: 6px;
+  font-size: 0.72rem;
+  font-family: 'Fira Code', monospace;
   width: 52px;
   text-align: center;
-  transition: border-color 0.2s;
+  transition: border-color 0.2s, box-shadow 0.2s;
   color-scheme: dark;
   -moz-appearance: textfield;
 }
 input[type="number"]:hover,
 input[type="number"]:focus {
-  border-color: var(--mode-color);
+  border-color: var(--mode-color-dim);
+  box-shadow: 0 0 0 3px var(--mode-color-subtle);
   outline: none;
 }
 /* Remove setas nativas (spin buttons) — já existe slider ao lado */
@@ -452,37 +455,39 @@ input[type="number"]::-webkit-inner-spin-button {
 
 select {
   width: 100%;
-  background: rgba(0,0,0,0.3);
-  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(0,0,0,0.35);
+  border: 1px solid rgba(255,255,255,0.08);
   color: var(--text-main);
-  padding: 5px 28px 5px 8px;
-  border-radius: 5px;
-  font-size: 0.78rem;
-  font-family: 'Inter', sans-serif;
+  padding: 6px 28px 6px 10px;
+  border-radius: 6px;
+  font-size: 0.68rem;
+  font-family: 'Fira Code', monospace;
+  letter-spacing: 0.02em;
   cursor: pointer;
-  transition: border-color 0.2s;
-  /* Remove estilo nativo e injeta seta personalizada */
+  transition: border-color 0.2s, box-shadow 0.2s;
   -webkit-appearance: none;
   -moz-appearance: none;
   appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23cfcfc4'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%2352525b'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
-  background-position: right 9px center;
+  background-position: right 10px center;
   color-scheme: dark;
 }
 select:hover,
 select:focus {
-  border-color: var(--mode-color);
+  border-color: var(--mode-color-dim);
+  box-shadow: 0 0 0 3px var(--mode-color-subtle);
   outline: none;
 }
 select option {
-  background: var(--sidebar-bg);
+  background: #18181b;
   color: var(--text-main);
+  font-family: 'Fira Code', monospace;
 }
 
 input[type="checkbox"] {
-  accent-color: var(--accent);
-  width: 14px; height: 14px;
+  accent-color: var(--mode-color);
+  width: 13px; height: 13px;
   cursor: pointer;
 }
 
@@ -490,34 +495,40 @@ input[type="checkbox"] {
    BUTTONS
 ═══════════════════════════════════════ */
 .btn {
-  background: rgba(255,255,255,0.05);
-  color: var(--text-main);
-  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.04);
+  color: #a1a1aa;
+  border: 1px solid rgba(255,255,255,0.07);
   border-radius: 7px;
-  padding: 7px 10px;
+  padding: 6px 10px;
   cursor: pointer;
-  font-size: 0.72rem;
-  font-family: 'Inter', sans-serif;
+  font-size: 0.63rem;
+  font-family: 'Fira Code', monospace;
   font-weight: 500;
-  transition: background 0.2s, border-color 0.2s, transform 0.1s;
+  letter-spacing: 0.06em;
+  transition: background 0.2s, border-color 0.2s, color 0.2s, transform 0.1s;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
-  letter-spacing: 0.02em;
+  gap: 6px;
 }
 .btn:hover {
-  background: rgba(255,255,255,0.1);
-  border-color: rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.08);
+  border-color: rgba(255,255,255,0.13);
+  color: var(--text-main);
 }
-.btn:active { transform: scale(0.95); }
+.btn:active { transform: scale(0.96); }
 
+/* Botão de destaque — stress test */
 .btn-stress {
-  background: var(--accent);
-  color: #fff;
-  border-color: transparent;
+  background: rgba(255, 78, 62, 0.08);
+  color: var(--accent-red);
+  border-color: rgba(255, 78, 62, 0.25);
 }
-.btn-stress:hover { background: var(--accent-red); }
+.btn-stress:hover {
+  background: rgba(255, 78, 62, 0.15);
+  border-color: rgba(255, 78, 62, 0.45);
+  color: #ff6b5b;
+}
 
 /* ═══════════════════════════════════════
    CHART PANEL
@@ -1022,9 +1033,7 @@ button > svg {
 
 /* #2 — .btn :focus-visible — outline acessível */
 .btn:focus-visible,
-.topbar-btn:focus-visible,
-#minimizeBtn:focus-visible,
-#toggleChartBtn:focus-visible {
+.topbar-btn:focus-visible {
   outline: 2px solid var(--mode-color);
   outline-offset: 2px;
   box-shadow: 0 0 0 4px var(--mode-color-subtle);
@@ -1165,15 +1174,11 @@ html, body, #controlPanel {
 
 /* Esconde tudo exceto a topbar e o canvas */
 body.presentation-mode #controlPanel,
-body.presentation-mode #leftButtonGroup,
 body.presentation-mode #chartPanel {
   opacity: 0;
   pointer-events: none;
   transform: translateY(20px) translateX(-50%);
   transition: opacity 0.5s ease, transform 0.5s ease;
-}
-body.presentation-mode #leftButtonGroup {
-  transform: translateY(20px);
 }
 
 /* Topbar fica mais discreta — só o essencial */
@@ -1288,6 +1293,7 @@ body.presentation-mode #presentOverlay {
 .bento-theory p strong,
 .theory-block,
 .theory-block .tag,
+#controlPanel,
 #presentMode {
   transition: color 0.4s ease, border-color 0.4s ease,
               background 0.4s ease, box-shadow 0.4s ease;
