@@ -40,6 +40,8 @@ let currentCollidingPairs = new Set();
 let soundEnabled = true;
 let audioContext = null;
 let wireframeEnabled = false;
+let isPhysicsEnabled = false;   // Física Real (Resolução de Colisão AABB)
+let isHeatmapEnabled = false;   // Heatmap de Colisões
 let typingInterval = null;
 let lastComparisonCount = 0;
 const pseudoCodeEl = document.getElementById('pseudoCode');
@@ -660,6 +662,7 @@ function createCube(spawnIndex = 0) {
     geometry,
     solidMaterial,
     wireframeMaterial,
+    collisionCount: 0,            // Heatmap: contador de toques acumulados
     spawnScale: -Math.min(spawnIndex * 0.08, 1.5),
     spawnDone: false
   };
@@ -760,11 +763,89 @@ function intersectAABB(a, b) {
          Math.abs(a.mesh.position.z - b.mesh.position.z) < (hA + hB);
 }
 
+// --- RESOLUÇÃO DE COLISÃO AABB (Física Real) ---
+// Separa os dois cubos ao longo do eixo de menor penetração (MTV — Minimum Translation Vector)
+// e inverte a componente da velocidade nesse eixo, simulando um ressalto elástico.
+function resolveCollision(cubeA, cubeB) {
+  const hA = cubeA.size / 2;
+  const hB = cubeB.size / 2;
+  const sum = hA + hB;
+
+  const dx = cubeA.mesh.position.x - cubeB.mesh.position.x;
+  const dy = cubeA.mesh.position.y - cubeB.mesh.position.y;
+  const dz = cubeA.mesh.position.z - cubeB.mesh.position.z;
+
+  // Profundidade de penetração em cada eixo (overlap positivo = estão sobrepostos)
+  const overlapX = sum - Math.abs(dx);
+  const overlapY = sum - Math.abs(dy);
+  const overlapZ = sum - Math.abs(dz);
+
+  // Eixo de menor penetração (MTV)
+  if (overlapX <= overlapY && overlapX <= overlapZ) {
+    // Colisão no eixo X
+    const sign = dx >= 0 ? 1 : -1;
+    const correction = overlapX / 2;
+    cubeA.mesh.position.x += sign * correction;
+    cubeB.mesh.position.x -= sign * correction;
+    cubeA.velocity.x =  Math.abs(cubeA.velocity.x) * sign;
+    cubeB.velocity.x = -Math.abs(cubeB.velocity.x) * sign;
+
+  } else if (overlapY <= overlapX && overlapY <= overlapZ) {
+    // Colisão no eixo Y
+    const sign = dy >= 0 ? 1 : -1;
+    const correction = overlapY / 2;
+    cubeA.mesh.position.y += sign * correction;
+    cubeB.mesh.position.y -= sign * correction;
+    cubeA.velocity.y =  Math.abs(cubeA.velocity.y) * sign;
+    cubeB.velocity.y = -Math.abs(cubeB.velocity.y) * sign;
+
+  } else {
+    // Colisão no eixo Z
+    const sign = dz >= 0 ? 1 : -1;
+    const correction = overlapZ / 2;
+    cubeA.mesh.position.z += sign * correction;
+    cubeB.mesh.position.z -= sign * correction;
+    cubeA.velocity.z =  Math.abs(cubeA.velocity.z) * sign;
+    cubeB.velocity.z = -Math.abs(cubeB.velocity.z) * sign;
+  }
+}
+
+// --- HEATMAP DE COLISÕES ---
+// Incrementa o contador de toques do cubo e aplica a cor correspondente ao calor acumulado.
+// Gradiente: 0 = cor base | 1-2 = amarelo | 3-4 = laranja | 5-7 = vermelho | 8+ = magenta
+const HEATMAP_COLORS = [
+  new THREE.Color(0xffee44), // 1-2 toques — amarelo
+  new THREE.Color(0xff8800), // 3-4 toques — laranja
+  new THREE.Color(0xff2a2a), // 5-7 toques — vermelho vivo
+  new THREE.Color(0xff00cc), // 8+  toques — magenta
+];
+
+function updateCubeHeatmap(cube) {
+  cube.collisionCount++;
+  const count = cube.collisionCount;
+
+  let heatColor;
+  if      (count <= 2) heatColor = HEATMAP_COLORS[0];
+  else if (count <= 4) heatColor = HEATMAP_COLORS[1];
+  else if (count <= 7) heatColor = HEATMAP_COLORS[2];
+  else                 heatColor = HEATMAP_COLORS[3];
+
+  if (!cube.dragging) cube.mesh.material.color.copy(heatColor);
+}
+
+function resetHeatmap() {
+  cubes.forEach(cube => {
+    cube.collisionCount = 0;
+    if (!cube.dragging) cube.mesh.material.color.copy(cube.baseColor);
+  });
+}
+
 function detectCollisions() {
   cubes.forEach(c => {
     c.colliding = false;
     if (!c.dragging) {
-      c.mesh.material.color.copy(c.baseColor);
+      // Em modo heatmap, não repõe a cor base a cada frame — ela persiste
+      if (!isHeatmapEnabled) c.mesh.material.color.copy(c.baseColor);
       c.mesh.scale.lerp(new THREE.Vector3(1, 1, 1), 0.1);
     }
   });
@@ -788,6 +869,7 @@ function detectCollisions() {
         if (intersectAABB(cube, other)) {
           localActiveCollisions++;
           newPairs.add(`${cube.id}-${other.id}`);
+          if (isPhysicsEnabled) resolveCollision(cube, other);
         }
       });
     });
@@ -810,6 +892,7 @@ function detectCollisions() {
         if (intersectAABB(cube, other)) {
           localActiveCollisions++;
           newPairs.add(pairKey);
+          if (isPhysicsEnabled) resolveCollision(cube, other);
         }
       });
     });
@@ -823,6 +906,7 @@ function detectCollisions() {
         if (intersectAABB(cubes[i], cubes[j])) {
           localActiveCollisions++;
           newPairs.add(`${cubes[i].id}-${cubes[j].id}`);
+          if (isPhysicsEnabled) resolveCollision(cubes[i], cubes[j]);
         }
       }
     }
@@ -844,8 +928,8 @@ function detectCollisions() {
     const [id1, id2] = key.split('-');
     const c1 = cubes.find(c => c.id == parseInt(id1));
     const c2 = cubes.find(c => c.id == parseInt(id2));
-    if (c1) { c1.colliding = true; if (!c1.dragging) { c1.mesh.material.color.copy(COLLISION_COLOR); c1.mesh.scale.set(1.15, 0.85, 1.15); } }
-    if (c2) { c2.colliding = true; if (!c2.dragging) { c2.mesh.material.color.copy(COLLISION_COLOR); c2.mesh.scale.set(1.15, 0.85, 1.15); } }
+    if (c1) { c1.colliding = true; if (!c1.dragging) { if (isHeatmapEnabled) updateCubeHeatmap(c1); else c1.mesh.material.color.copy(COLLISION_COLOR); c1.mesh.scale.set(1.15, 0.85, 1.15); } }
+    if (c2) { c2.colliding = true; if (!c2.dragging) { if (isHeatmapEnabled) updateCubeHeatmap(c2); else c2.mesh.material.color.copy(COLLISION_COLOR); c2.mesh.scale.set(1.15, 0.85, 1.15); } }
 
     if (!currentCollidingPairs.has(key)) {
       collisionCount++;
@@ -1285,6 +1369,13 @@ document.getElementById('resetBtn').addEventListener('click', () => {
 });
 document.getElementById('showGrid').addEventListener('change', e => scene.children.find(c => c.type === "GridHelper").visible = e.target.checked);
 
+document.getElementById('heatmapToggle').addEventListener('change', e => {
+  isHeatmapEnabled = e.target.checked;
+  // Ao desligar, repõe as cores base imediatamente (limpa o calor acumulado)
+  if (!isHeatmapEnabled) resetHeatmap();
+  playSound();
+});
+
 minimizeBtn.addEventListener('click', () => {
   controlPanel.classList.toggle('panel-hidden');
   const active = !controlPanel.classList.contains('panel-hidden');
@@ -1391,6 +1482,16 @@ wireframeBtn.addEventListener('click', () => {
 
 document.getElementById('exportCsvBtn').addEventListener('click', () => {
   exportCSV();
+  playSound();
+});
+
+document.getElementById('physicsBtn').addEventListener('click', () => {
+  isPhysicsEnabled = !isPhysicsEnabled;
+  const btn = document.getElementById('physicsBtn');
+  btn.classList.toggle('btn-active', isPhysicsEnabled);
+  btn.style.background   = isPhysicsEnabled ? 'var(--mode-color-glow)'   : '';
+  btn.style.borderColor  = isPhysicsEnabled ? 'var(--mode-color-dim)'    : '';
+  btn.style.color        = isPhysicsEnabled ? 'var(--mode-color)'        : '';
   playSound();
 });
 

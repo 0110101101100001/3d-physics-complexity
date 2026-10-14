@@ -370,13 +370,14 @@ canvas:not(#perfChart) {
 .bento-terminal { justify-content: space-between; }
 .bento-terminal pre#pseudoCode {
   font-size: 0.64rem;
-  color: #52525b;
+  color: #c4c4cc;
   line-height: 1.6;
   white-space: pre-wrap;
   flex: 1;
+  text-shadow: 0 0 8px var(--mode-color-glow);
 }
 .bento-terminal pre#pseudoCode .typed-char {
-  color: #71717a;
+  color: #e4e4e7;
 }
 .terminal-cursor {
   font-family: 'Fira Code', monospace;
