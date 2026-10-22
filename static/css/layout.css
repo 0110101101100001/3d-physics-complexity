@@ -1,0 +1,476 @@
+/* ==========================================================================
+   LAYOUT.CSS — Landing Page: Estilo Utilitário / Editorial
+   Sem neon, sem glow. Tipografia editorial, cores sólidas, arte isométrica.
+   ========================================================================== */
+
+/* ── Tipografia coesa — título integrado, sem WordArt ── */
+.landing-title,
+.landing-title * {
+  font-family: 'Inter', sans-serif;
+}
+
+.title-main {
+  display: inline;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.title-accent {
+  display: inline;
+  font-family: 'Playfair Display', serif;
+  font-style: italic;
+  font-weight: 700;
+  color: #ff7139;
+  line-height: 1.15;
+  font-size: 1em;
+}
+
+.hud-label {
+  font-family: 'Fira Code', monospace;
+  font-size: 9px;
+  letter-spacing: 0.05em;
+}
+
+/* ── Landing content: duas colunas (texto esquerda, visual direita) ── */
+.landing-content {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  max-width: 1200px;
+  width: 100%;
+  padding: 0 2.5rem;
+  position: relative;
+  z-index: 3;
+}
+
+/* ── Coluna esquerda: textos ancorados à margem ── */
+.landing-left-column {
+  max-width: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1.5rem;
+  justify-self: start;
+}
+
+/* ── Coluna direita: espaço orgânico com elementos flutuantes ── */
+.landing-visual {
+  position: relative;
+  flex-shrink: 0;
+  width: 520px;
+  height: 520px;
+  /* Quebra de simetria: rotação subtil */
+  transform: rotate(-0.8deg);
+  transform-origin: center center;
+  margin-top: -24px;
+  margin-left: 24px;
+  z-index: 2;
+}
+
+/* ── Âncora gráfica discreta (wireframe 3D em perspetiva) ── */
+.grid-anchor {
+  position: absolute;
+  width: 400px;
+  height: 400px;
+  top: 100px;
+  left: -40px;
+  opacity: 0.03;
+  z-index: 0;
+  pointer-events: none;
+  animation: grid-anchor-drift 12s ease-in-out infinite alternate;
+}
+
+.grid-anchor::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+  background-size: 24px 24px;
+  transform: rotateX(60deg) rotateZ(-30deg);
+  transform-origin: center;
+  clip-path: polygon(20% 20%, 80% 20%, 80% 80%, 20% 80%);
+}
+
+@keyframes grid-anchor-drift {
+  0% { transform: translate(0, 0) scale(1) rotateX(60deg) rotateZ(-30deg); }
+  100% { transform: translate(20px, -20px) scale(1.02) rotateX(60deg) rotateZ(-30deg); }
+}
+
+/* ── Fundo orgânico (blob) ── */
+.organic-blob {
+  position: absolute;
+  border-radius: 60% 40% 70% 30% / 50% 60% 40% 50%;
+  background: linear-gradient(
+    135deg,
+    rgba(168, 85, 247, 0.08) 0%,
+    rgba(255, 113, 57, 0.04) 50%,
+    rgba(168, 85, 247, 0.02) 100%
+  );
+  filter: blur(40px);
+  z-index: 0;
+  animation: blob-drift 8s ease-in-out infinite alternate;
+}
+
+.organic-blob {
+  width: 320px;
+  height: 320px;
+  top: 60px;
+  right: -60px;
+}
+
+.blob-secondary {
+  width: 200px;
+  height: 200px;
+  bottom: -40px;
+  left: -40px;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 113, 57, 0.06) 0%,
+    rgba(168, 85, 247, 0.03) 100%
+  );
+  animation: blob-drift 10s ease-in-out infinite alternate-reverse;
+}
+
+@keyframes blob-drift {
+  0% { transform: translate(0, 0) scale(1); }
+  100% { transform: translate(30px, -40px) scale(1.05); }
+}
+
+/* ── Cartões flutuantes ── */
+.float-card {
+  position: absolute;
+  background: #0a0a0a;
+  border: 1px solid #333333;
+  border-radius: 8px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  animation: float-card 6s ease-in-out infinite;
+  z-index: 1;
+  overflow: hidden;
+}
+
+/* Animação de flutuação individual por cartão */
+.float-card:nth-child(2) {
+  animation-name: float-card-a;
+  animation-duration: 7s;
+  animation-delay: 0s;
+}
+.float-card:nth-child(3) {
+  animation-name: float-card-b;
+  animation-duration: 5s;
+  animation-delay: 1s;
+}
+
+@keyframes float-card-a {
+  0%, 100% { transform: translateY(0) rotate(-2deg); }
+  50% { transform: translateY(-14px) rotate(-1.8deg); }
+}
+@keyframes float-card-b {
+  0%, 100% { transform: translateY(0) rotate(1deg); }
+  50% { transform: translateY(-10px) rotate(1.2deg); }
+}
+@keyframes float-card {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+/* Terminal card (principal, rodado) */
+.terminal-card {
+  width: 300px;
+  height: 300px;
+  top: 20px;
+  left: 140px;
+  transform: rotate(-2deg);
+}
+
+/* Telemetry card (secundário, menor) — sobrepõe o terminal */
+.telemetry-card {
+  position: absolute;
+  width: 170px;
+  height: 140px;
+  bottom: -40px;
+  right: -30px;
+  transform: rotate(1.5deg);
+  z-index: 10;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8);
+}
+
+/* Terminal header compacto */
+.terminal-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: #161616;
+  border-bottom: 1px solid #333333;
+}
+
+.terminal-controls {
+  display: flex;
+  gap: 6px;
+}
+
+.dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+
+.dot.red { background: #ff5f56; box-shadow: 0 0 0 1px rgba(0,0,0,0.3); }
+.dot.yellow { background: #ffbd2e; box-shadow: 0 0 0 1px rgba(0,0,0,0.3); }
+.dot.green { background: #27c93f; box-shadow: 0 0 0 1px rgba(0,0,0,0.3); }
+
+.terminal-title {
+  font-family: 'Fira Code', monospace;
+  font-size: 10px;
+  font-weight: 500;
+  color: #a1a1aa;
+  letter-spacing: 0.05em;
+  margin-left: auto;
+}
+
+.terminal-body {
+  padding: 12px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.terminal-body-compact {
+  gap: 2px;
+  padding: 10px;
+}
+
+.log-line {
+  font-family: 'Fira Code', monospace;
+  font-size: 10px;
+  line-height: 1.3;
+  color: #e4e4e7;
+  white-space: pre-wrap;
+  opacity: 0;
+  animation: log-fade-in 0.4s ease forwards;
+}
+
+.log-line.log-empty {
+  opacity: 0.3;
+}
+
+@keyframes log-fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Syntax highlighting para logs */
+.log-tag { color: #ff7139; font-weight: 600; }
+.log-msg { color: #e4e4e7; }
+.log-ok { color: #00ddff; font-weight: 600; }
+.log-num { color: #ffd166; font-weight: 500; }
+.log-unit { color: #a1a1aa; opacity: 0.8; }
+.log-val { color: #a855f7; font-weight: 500; }
+
+/* ── Telemetria mini card ── */
+.telemetry-header {
+  padding: 8px 12px;
+  background: #161616;
+  border-bottom: 1px solid #333333;
+}
+
+.telemetry-title {
+  font-family: 'Fira Code', monospace;
+  font-size: 9px;
+  font-weight: 600;
+  color: #ff7139;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.telemetry-body {
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.telemetry-row {
+  display: flex;
+  justify-content: space-between;
+  font-family: 'Fira Code', monospace;
+  font-size: 10px;
+}
+
+.telemetry-label {
+  color: #a1a1aa;
+  opacity: 0.7;
+}
+
+.telemetry-value {
+  color: #e4e4e7;
+  font-weight: 500;
+}
+
+/* ── Elementos decorativos soltos ── */
+.decorative-cross {
+  position: absolute;
+  top: 150px;
+  right: 100px;
+  font-family: 'Fira Code', monospace;
+  font-size: 10px;
+  font-weight: 700;
+  color: rgba(255, 113, 57, 0.3);
+  z-index: 0;
+  animation: cross-bob 4s ease-in-out infinite;
+}
+
+.decorative-cross-sm {
+  font-size: 8px;
+  color: rgba(168, 85, 247, 0.25);
+  bottom: 120px;
+  left: 60px;
+  animation-duration: 5s;
+  animation-delay: 1s;
+}
+
+.decorative-dot {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #ff7139;
+  top: 260px;
+  left: 280px;
+  z-index: 0;
+  opacity: 0.4;
+  animation: dot-pulse 3s ease-in-out infinite;
+}
+
+.decorative-dot-sm {
+  width: 8px;
+  height: 8px;
+  background: #00ddff;
+  bottom: 60px;
+  left: 200px;
+  opacity: 0.35;
+  animation-duration: 2.5s;
+  animation-delay: 0.5s;
+}
+
+.decorative-dot-md {
+  width: 10px;
+  height: 10px;
+  background: #a855f7;
+  top: 40px;
+  left: 380px;
+  opacity: 0.3;
+  animation-duration: 4s;
+  animation-delay: 2s;
+}
+
+@keyframes cross-bob {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-6px) rotate(3deg); }
+}
+@keyframes dot-pulse {
+  0%, 100% { opacity: 0.3; transform: scale(1); }
+  50% { opacity: 0.7; transform: scale(1.15); }
+}
+
+/* Cursor piscante no terminal */
+.typewriter-cursor {
+  font-family: 'Fira Code', monospace;
+  font-size: 11px;
+  font-weight: 500;
+  color: #00ddff;
+  display: inline-block;
+  margin-left: 4px;
+  animation: cursor-blink 1s step-end infinite;
+  align-self: flex-start;
+}
+
+@keyframes cursor-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+/* ── Subtítulos: respiro editorial ── */
+.landing-subtitle-block {
+  margin: 0;
+}
+.landing-subtitle {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.95rem;
+  font-weight: 400;
+  color: #d1d5db;
+  line-height: 1.7;
+  max-width: 450px;
+  letter-spacing: -0.01em;
+  margin-bottom: 0.75rem;
+  text-align: left;
+}
+.landing-subtitle-secondary {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.8rem;
+  font-weight: 400;
+  color: #9ca3af;
+  line-height: 1.7;
+  max-width: 450px;
+  letter-spacing: -0.01em;
+  margin-bottom: 1.5rem;
+  text-align: left;
+}
+.landing-subtitle-secondary strong { color: #71717a; font-weight: 500; }
+.landing-subtitle-secondary em { color: #71717a; font-style: normal; }
+
+/* ── CTA row: ancorado à margem esquerda, mesmo eixo do título ── */
+.landing-cta-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-top: 0.25rem;
+}
+
+/* ── Counter: alinhado à esquerda, abaixo do CTA ── */
+.landing-counter {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-family: 'Fira Code', monospace;
+  font-size: 0.72rem;
+  color: #a1a1aa;
+  flex-wrap: wrap;
+  margin-top: 0.25rem;
+  margin-left: 0;
+}
+
+.counter-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.counter-num {
+  color: #ff7139;
+  font-weight: 600;
+}
+
+.counter-sep {
+  color: #3f3f46;
+}
+
+@media (max-width: 768px) {
+  .landing-content {
+    padding: 0 1.5rem;
+  }
+
+  .landing-left-column {
+    gap: 1.25rem;
+  }
+
+  .title-accent {
+    margin: 0;
+  }
+}

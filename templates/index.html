@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Detecção de Colisão 3D — O(n²) vs O(n)</title>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Inter:wght@300;400;500;600;800&family=Playfair+Display:ital,wght@0,400;0,700;1,400;1,700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/layout.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/components.css') }}">
+</head>
+<body>
+
+  <!-- Grid synthwave animada -->
+  <div id="synthGrid"></div>
+
+  <!-- LANDING PAGE -->
+  <div id="landingPage">
+    <div class="landing-content">
+
+      <div class="landing-left-column landing-anim" style="--delay: 0s">
+        <div class="landing-badge">
+          <span class="badge-line"></span>
+          <span class="badge-dot"></span>
+          <span class="badge-label">TRABALHO ACADÉMICO // FÍSICA 3D</span>
+        </div>
+
+        <h1 class="landing-title landing-anim" style="--delay: 0.18s">
+          <span class="title-main">Detecção de Colisão em 3D:<br>Prova Matemática de <span class="title-accent">Eficiência</span></span>
+        </h1>
+
+        <div class="landing-subtitle-block" style="--delay: 0.34s">
+          <p class="landing-subtitle">
+            Ganho de eficiência do uso de estruturas espaciais como Octrees em simulações tridimensionais — demonstrado com telemetria em tempo real.
+          </p>
+          <p class="landing-subtitle-secondary">
+            Cada frame executa o algoritmo <strong>AABB</strong> sobre todos os objetos da cena. A escolha da estratégia de <em>Broad-Phase</em> define se o motor escala linearmente ou colapsa com o aumento de N.
+          </p>
+        </div>
+
+        <div class="landing-metrics" style="--delay: 0.5s">
+          <span class="metric-pill pill-red">O(n²) <span class="pill-label">Força Bruta</span></span>
+          <span class="metric-pill-sep">·</span>
+          <span class="metric-pill pill-purple">O(n log n) <span class="pill-label">Octree</span></span>
+          <span class="metric-pill-sep">·</span>
+          <span class="metric-pill pill-blue">O(n) <span class="pill-label">Grade Espacial</span></span>
+        </div>
+
+        <div class="landing-cta-row" style="--delay: 0.66s">
+          <button id="startBtn" class="cta-btn">
+            Iniciar Simulação
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M5 12h14M12 5l7 7-7 7"/>
+            </svg>
+          </button>
+          <p class="landing-counter">
+            <span class="counter-item"><span class="counter-num" data-target="3">0</span> estratégias</span>
+            <span class="counter-sep">·</span>
+            <span class="counter-item"><span class="counter-num" data-target="150">0</span> objetos máx.</span>
+            <span class="counter-sep">·</span>
+            <span class="counter-item">telemetria <span class="counter-live">em tempo real</span></span>
+          </p>
+        </div>
+      </div>
+
+      <div class="landing-visual landing-anim" style="--delay: 0.8s">
+        <!-- Fundo orgânico / blob assimétrico -->
+        <div class="organic-blob"></div>
+        <div class="organic-blob blob-secondary"></div>
+
+        <!-- Âncora gráfica discreta (wireframe 3D em perspetiva) -->
+        <div class="grid-anchor"></div>
+
+        <!-- Cartão principal do terminal (pequeno, rodado) -->
+        <div class="float-card terminal-card">
+          <div class="terminal-header">
+            <div class="terminal-controls">
+              <span class="dot red"></span>
+              <span class="dot yellow"></span>
+              <span class="dot green"></span>
+            </div>
+            <span class="terminal-title">physics_engine.log</span>
+          </div>
+          <div class="terminal-body terminal-body-compact">
+            <div class="log-line"><span class="log-tag">[SYS]</span> <span class="log-msg">Init physics engine v3.0...</span> <span class="log-ok">OK</span></div>
+            <div class="log-line"><span class="log-tag">[MEM]</span> <span class="log-msg">Heap:</span> <span class="log-num">42.5</span> <span class="log-unit">MB</span> / <span class="log-num">128</span> <span class="log-unit">MB</span></div>
+            <div class="log-line"><span class="log-tag">[STATE]</span> <span class="log-msg">Broad-Phase:</span> <span class="log-val">Octree</span> <span class="log-msg">(Depth:</span> <span class="log-num">6</span> <span class="log-msg">)</span></div>
+            <div class="log-line"><span class="log-tag">[METRICS]</span> <span class="log-msg">FPS:</span> <span class="log-num" id="log-fps">60</span></div>
+            <div class="log-line"><span class="log-tag">[DATA]</span> <span class="log-msg">Entities:</span> <span class="log-num" id="log-entities">1024</span></div>
+            <div class="typewriter-cursor">█</div>
+          </div>
+        </div>
+
+        <!-- Cartão secundário flutuante (mini painel de telemetria) -->
+        <div class="float-card telemetry-card">
+          <div class="telemetry-header">
+            <span class="telemetry-title">TELEMETRY</span>
+          </div>
+          <div class="telemetry-body">
+            <div class="telemetry-row">
+              <span class="telemetry-label">Δ:</span>
+              <span class="telemetry-value" id="telemetry-delta">16.6ms</span>
+            </div>
+            <div class="telemetry-row">
+              <span class="telemetry-label">COL:</span>
+              <span class="telemetry-value" id="telemetry-collisions">34</span>
+            </div>
+            <div class="telemetry-row">
+              <span class="telemetry-label">OBJ:</span>
+              <span class="telemetry-value" id="telemetry-objects">1024</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Elementos decorativos soltos -->
+        <div class="decorative-cross">+</div>
+        <div class="decorative-cross decorative-cross-sm">+</div>
+        <div class="decorative-dot"></div>
+        <div class="decorative-dot decorative-dot-sm"></div>
+        <div class="decorative-dot decorative-dot-md"></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- TOP BAR -->
+  <header id="topBar">
+    <div class="topbar-left">
+      <span class="topbar-dot"></span>
+      <span class="topbar-logo">PHYSICS_SIM <span class="topbar-version">v2.6</span></span>
+    </div>
+
+    <div class="topbar-center">
+      <div class="topbar-metric">
+        <span class="metric-label">OBJETOS</span>
+        <span class="metric-value" id="tbObjects">—</span>
+      </div>
+      <div class="topbar-sep">|</div>
+      <div class="topbar-metric">
+        <span class="metric-label">COLISÕES</span>
+        <span class="metric-value" id="tbCollisions">
+          <span id="badgeIndicator"></span>
+          <span id="badgeText">0</span>
+        </span>
+      </div>
+      <div class="topbar-sep">|</div>
+      <div class="topbar-metric">
+        <span class="economy-badge">ECONOMIA: <strong id="econVal">0%</strong></span>
+      </div>
+      <div class="topbar-metric">
+        <span class="metric-label">MODO</span>
+        <span class="metric-value accent" id="tbMode">Bruta O(n²)</span>
+      </div>
+    </div>
+
+    <div class="topbar-right">
+      <span id="stressBadge"><span class="stress-badge-dot"></span>STRESS</span>
+      <button id="toggleChartBtn" class="topbar-btn" title="Mostrar/Esconder Gráfico">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+        GRÁFICO
+      </button>
+      <button id="minimizeBtn" class="topbar-btn" title="Mostrar/Esconder Menu">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        MENU
+      </button>
+      <button id="benchTopbarBtn" class="topbar-btn" title="Benchmark [B]">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+        BENCHMARK
+      </button>
+      <button id="presentBtn" class="topbar-btn" title="Modo Apresentação [P]">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+        APRESENTAR
+      </button>
+      <button id="soundBtn" class="topbar-btn" title="Som">
+        <svg id="soundIconOn" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+        <svg id="soundIconOff" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="display:none"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>
+        <span id="soundLabel">SOM</span>
+      </button>
+      <button id="theoryBtn" class="topbar-btn" title="Teoria [T]">TEORIA</button>
+    </div>
+  </header>
+
+  <div id="collisionBadge" style="display:none;">
+    <span></span>
+  </div>
+
+  <div id="controlPanel" class="panel-hidden">
+    <div id="panelContent">
+      <div class="bento-grid">
+
+        <div class="bento-cell bento-theory">
+          <div class="bento-label">CONTEXTO</div>
+          <p><strong>Algoritmo:</strong> <span id="context-algorithm">AABB — Axis-Aligned Bounding Box</span></p>
+          <p><strong>Pior Caso:</strong> <span id="context-worstcase">O(n²) — verificação por força bruta</span></p>
+          <p><strong>Op. Básica:</strong> <span id="context-op">Sobreposição nos eixos X, Y e Z</span></p>
+        </div>
+
+        <div class="bento-cell bento-sim sim-controls">
+          <div class="bento-label">SIMULAÇÃO</div>
+          <div class="control-group">
+            <label for="cubeCount">Cubos</label>
+            <div class="input-row">
+              <input type="range" id="cubeCount" min="2" max="20" value="8" autocomplete="off">
+              <input type="number" id="cubeCountInput" min="2" max="20" value="8" autocomplete="off">
+            </div>
+          </div>
+          <div class="control-group">
+            <label for="speed">Velocidade</label>
+            <input type="range" id="speed" min="0.2" max="2" step="0.1" value="0.8" autocomplete="off">
+          </div>
+          <div class="control-group">
+            <label for="cellSize">Tam. Célula Grid</label>
+            <div class="input-row">
+              <input type="range" id="cellSize" min="1" max="10" step="0.5" value="2" autocomplete="off">
+              <input type="number" id="cellSizeInput" min="1" max="10" step="0.5" value="2" autocomplete="off">
+            </div>
+          </div>
+          <div class="control-group">
+            <label for="octreeDepth">Profundidade Octree</label>
+            <div class="input-row">
+              <input type="range" id="octreeDepth" min="1" max="10" step="1" value="6" autocomplete="off">
+              <input type="number" id="octreeDepthInput" min="1" max="10" step="1" value="6" autocomplete="off">
+            </div>
+          </div>
+          <div class="control-group">
+            <label for="broadPhaseSelect">Estratégia Broad-Phase</label>
+            <select id="broadPhaseSelect" autocomplete="off">
+              <option value="brute">Força Bruta O(n²)</option>
+              <option value="grid">Grade Espacial Uniforme O(n)</option>
+              <option value="octree">Particionamento Hierárquico O(n log n)</option>
+            </select>
+          </div>
+          <div class="control-group checkbox-row">
+            <label class="checkbox-label">
+              <input type="checkbox" id="showGrid" checked autocomplete="off">
+              <span>Grade 3D</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="bento-cell bento-actions">
+          <div class="bento-label">AÇÕES</div>
+          <div class="btn-grid">
+            <!-- Linha 1: Controle da Simulação -->
+            <button id="toggleBtn" class="btn">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+              PAUSAR
+            </button>
+            <button id="resetBtn" class="btn">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+              REINICIAR
+            </button>
+
+            <!-- Linha 2: Visualização e Física -->
+            <button id="wireframeBtn" class="btn">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+              WIREFRAME
+            </button>
+            <button id="physicsBtn" class="btn">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+              FÍSICA REAL
+            </button>
+
+            <!-- Linha 3: Ferramentas e Testes -->
+            <button id="stressBtn" class="btn">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+              STRESS TEST
+            </button>
+            <button id="captureBtn" class="btn">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="12" cy="12" r="3"/></svg>
+              CAPTURAR TELA
+            </button>
+
+            <!-- Linha 4: Dados - Largura total -->
+            <button id="historyCsvBtn" class="btn btn-wide">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+              HISTÓRICO CSV
+            </button>
+          </div>
+        </div>
+
+        <div class="bento-cell bento-terminal terminal">
+          <div class="bento-label">PSEUDOCÓDIGO</div>
+          <pre id="pseudoCode">&#62; FUNCAO intersectarAABB(A, B):
+&#62;   dx = abs(A.x - B.x)
+&#62;   dy = abs(A.y - B.y)
+&#62;   dz = abs(A.z - B.z)
+&#62;
+&#62;   SE dx &lt; (A.size + B.size)/2
+&#62;    E dy &lt; (A.size + B.size)/2
+&#62;    E dz &lt; (A.size + B.size)/2:
+&#62;      RETORNAR VERDADEIRO
+&#62;   RETORNAR FALSO</pre>
+          <div class="terminal-cursor"><span class="blink">_</span></div>
+        </div>
+
+      </div>
+
+      <div class="shortcuts-bar">
+        <span><kbd>Espaço</kbd> Pausar</span>
+        <span><kbd>R</kbd> Reiniciar</span>
+        <span><kbd>S</kbd> Stress</span>
+        <span><kbd>W</kbd> Wireframe</span>
+        <span><kbd>P</kbd> Apresentar</span>
+        <span><kbd>B</kbd> Benchmark</span>
+      </div>
+    </div>
+  </div>
+
+  <div id="chartPanel" class="chart-hidden">
+    <div class="chart-title">CURVAS ASSINTÓTICAS COMPARATIVAS</div>
+    <canvas id="perfChart" width="280" height="200"></canvas>
+    <div id="chartLegend">
+      <div class="legend-item">
+        <span class="legend-color" style="background: #ff7139;"></span>
+        <span class="legend-label">Força Bruta O(n²)</span>
+      </div>
+      <div class="legend-item">
+        <span class="legend-color" style="background: #00ddff;"></span>
+        <span class="legend-label">Grade Espacial O(n)</span>
+      </div>
+      <div class="legend-item">
+        <span class="legend-color" style="background: #7b2cbf;"></span>
+        <span class="legend-label">Octree O(n log n)</span>
+      </div>
+    </div>
+    <div id="chartStats">
+      <div class="stat-row">
+        <span class="stat-label">N</span>
+        <span class="stat-value" id="statN">—</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">ALGO</span>
+        <span class="stat-value" id="statAlgo">Força Bruta O(n²)</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">COMP.</span>
+        <span class="stat-value" id="statComp">—</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">TEMPO</span>
+        <span class="stat-value accent" id="statTime">—</span>
+      </div>
+    </div>
+  </div>
+
+  <div id="theoryModal" class="hidden">
+    <div class="modal-content">
+      <button id="closeTheoryBtn">✕ FECHAR</button>
+      <div class="theory-editorial">
+
+        <div class="theory-block">
+          <div class="tag">BROAD-PHASE</div>
+          <h4>O Problema: Colisões Cegas</h4>
+          <p>Em simulações 3D densas, testar colisões objeto-a-objeto esgota rapidamente o CPU. Usamos <strong>AABB (Axis-Aligned Bounding Box)</strong> — caixa alinhada aos eixos — como operação básica de intersecção nos eixos X, Y e Z. O desafio da fase <em>Broad-Phase</em> é reduzir matematicamente a quantidade destes testes por frame, eliminando pares impossíveis antes da verificação detalhada.</p>
+        </div>
+
+        <div class="theory-block">
+          <div class="tag">FORÇA BRUTA</div>
+          <h4>Força Bruta O(n²)</h4>
+          <p>Testa as fronteiras de cada objeto contra todos os outros objetos na cena. O número exato de comparações segue a Progressão Aritmética <strong>(N × (N - 1)) / 2</strong>. Não tem custo de inicialização, mas o crescimento quadrático torna-a insustentável para grandes volumes de objetos.</p>
+        </div>
+
+        <div class="theory-block">
+          <div class="tag">GRADE ESPACIAL</div>
+          <h4>Grade Espacial Uniforme O(n)</h4>
+          <p>Mapeia o espaço 3D em células de tamanho fixo. Atinge a complexidade ótima <strong>O(n)</strong> indexando objetos numa tabela Hash e testando colisões apenas com vizinhos nas células adjacentes. É extremamente rápido, mas colapsa para O(n²) se muitos objetos se aglomerarem numa única célula.</p>
+        </div>
+
+        <div class="theory-block">
+          <div class="tag">OCTREE</div>
+          <h4>Particionamento Octree O(n log n)</h4>
+          <p>Estrutura hierárquica que subdivide o espaço 3D em 8 octantes recursivamente. Usa <strong>Retenção no Nodo Pai</strong>: se a <em>Box3</em> de um objeto não couber inteiramente num filho, o objeto fica no nodo atual em vez de ser duplicado — eliminando o <em>Straddling Problem</em>. Na consulta, candidatos dos nodos ancestrais são sempre propagados, detetando toques superficiais nas fronteiras com <code>intersectsBox</code>.</p>
+        </div>
+
+        <div class="theory-block">
+          <div class="tag">CONSTANTES OCULTAS</div>
+          <h4>Overhead e Ponto de Interseção</h4>
+          <p>Na notação Big-O, constantes ocultas são ignoradas. Contudo, estruturas avançadas (Grade e Octree) exigem tempo de CPU para construção e subdivisão a cada frame. Para valores de <strong>N</strong> muito pequenos, esse <em>overhead</em> torna a Força Bruta temporariamente mais rápida, até o gráfico cruzar o <strong>Ponto de Interseção</strong>.</p>
+        </div>
+
+        <div class="theory-block">
+          <div class="tag">CONCLUSÃO</div>
+          <h4>Validação da Telemetria</h4>
+          <p>A simulação valida visualmente a teoria matemática. No gráfico, a curva exponencial da Força Bruta é inevitavelmente superada pelas abordagens espaciais. Não existe um vencedor absoluto: a escolha do algoritmo ideal depende da relação entre a densidade espacial dos objetos e o valor de <strong>N</strong> na aplicação real.</p>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <div id="benchWidget">
+    <div class="bench-widget-header">
+      <span class="bench-widget-title">BENCHMARK</span>
+      <span id="benchWidgetN" class="bench-widget-n">—</span>
+      <span class="bench-widget-info" tabindex="0" aria-label="Legenda das métricas">
+        ⓘ
+        <span class="bench-widget-tooltip">
+          <strong>TEMPO MÉD.</strong> — média aparada de 20 execuções do algoritmo de deteção, medida com <code>performance.now()</code>. Exclui os 15% mais lentos e mais rápidos para reduzir ruído de GC.<br><br>
+          <strong>COMP.</strong> — número de pares de objetos testados com AABB por frame. Força Bruta faz (N×(N-1))/2 testes; Grade e Octree reduzem esse número via estruturas espaciais.
+        </span>
+      </span>
+      <button id="benchWidgetClose" title="Fechar">✕</button>
+    </div>
+    <div id="benchWidgetRows"></div>
+    <button id="benchWidgetRerun" class="bench-widget-rerun">↻ re-executar</button>
+  </div>
+
+  <div id="benchmarkModal" class="hidden">
+    <div class="modal-content">
+      <button id="closeBenchmarkBtn">✕ FECHAR</button>
+      <div class="benchmark-editorial">
+        <div class="benchmark-header">
+          <div class="tag" style="font-family:'Fira Code',monospace;font-size:0.68rem;letter-spacing:0.08em;margin-bottom:16px;display:inline-block;padding:3px 8px;border-radius:4px;border:1px solid var(--mode-color-dim);background:var(--mode-color-subtle);color:var(--mode-color);">BENCHMARK // COMPARAÇÃO DE ALGORITMOS</div>
+          <p style="font-size:0.82rem;color:#71717a;margin-bottom:20px;">Cada algoritmo foi executado 20× sobre os <span id="benchN" style="color:var(--text-main);font-family:'Fira Code',monospace;"></span> cubos actuais. Média aparada (15% topo e base removidos).</p>
+        </div>
+        <table id="benchmarkTable" style="width:100%;border-collapse:collapse;font-family:'Fira Code',monospace;font-size:0.82rem;">
+          <thead>
+            <tr style="border-bottom:1px solid rgba(255,255,255,0.1);">
+              <th style="text-align:left;padding:8px 12px;color:#52525b;font-size:0.65rem;letter-spacing:0.08em;font-weight:500;">ALGORITMO</th>
+              <th style="text-align:right;padding:8px 12px;color:#52525b;font-size:0.65rem;letter-spacing:0.08em;font-weight:500;">COMPARAÇÕES</th>
+              <th style="text-align:right;padding:8px 12px;color:#52525b;font-size:0.65rem;letter-spacing:0.08em;font-weight:500;">TEMPO MÉD.</th>
+              <th style="text-align:right;padding:8px 12px;color:#52525b;font-size:0.65rem;letter-spacing:0.08em;font-weight:500;">RAZÃO</th>
+            </tr>
+          </thead>
+          <tbody id="benchmarkTbody">
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de Histórico CSV -->
+  <div id="historyCsvModal" class="hidden">
+    <div class="modal-content" style="max-width:780px;width:90%;margin:auto;">
+      <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid rgba(255,255,255,0.08);">
+        <div class="history-header">
+          <div class="tag" style="font-family:'Fira Code',monospace;font-size:0.68rem;letter-spacing:0.08em;margin-bottom:8px;display:inline-block;padding:3px 8px;border-radius:4px;border:1px solid var(--mode-color-dim);background:var(--mode-color-subtle);color:var(--mode-color);">HISTÓRICO // MÉTRICAS DA SIMULAÇÃO</div>
+          <p style="font-size:0.82rem;color:#71717a;margin-bottom:0;">Registos das rodadas de simulação. Use <strong>EXPORTAR CSV</strong> para baixar os dados completos.</p>
+        </div>
+        <button id="closeHistoryCsvBtn" style="background:transparent;border:1px solid #333333;color:#a1a1aa;padding:4px 10px;font-family:'Fira Code',monospace;font-size:0.72rem;border-radius:4px;cursor:pointer;">✕ FECHAR</button>
+      </div>
+      <table id="historyTable" style="width:100%;border-collapse:collapse;font-family:'Fira Code',monospace;font-size:0.82rem;">
+        <thead>
+          <tr style="border-bottom:1px solid rgba(255,255,255,0.1);">
+            <th style="text-align:left;padding:8px 12px;color:#71717a;font-size:0.65rem;letter-spacing:0.08em;font-weight:600;text-transform:uppercase;">RODADA</th>
+            <th style="text-align:right;padding:8px 12px;color:#71717a;font-size:0.65rem;letter-spacing:0.08em;font-weight:600;text-transform:uppercase;">N CUBOS</th>
+            <th style="text-align:right;padding:8px 12px;color:#71717a;font-size:0.65rem;letter-spacing:0.08em;font-weight:600;text-transform:uppercase;">ALGORITMO</th>
+            <th style="text-align:right;padding:8px 12px;color:#71717a;font-size:0.65rem;letter-spacing:0.08em;font-weight:600;text-transform:uppercase;">VELOCIDADE</th>
+            <th style="text-align:right;padding:8px 12px;color:#71717a;font-size:0.65rem;letter-spacing:0.08em;font-weight:600;text-transform:uppercase;">TAM. CÉLULA</th>
+            <th style="text-align:right;padding:8px 12px;color:#71717a;font-size:0.65rem;letter-spacing:0.08em;font-weight:600;text-transform:uppercase;">PROFUNDIDADE</th>
+            <th style="text-align:right;padding:8px 12px;color:#71717a;font-size:0.65rem;letter-spacing:0.08em;font-weight:600;text-transform:uppercase;">COLISÕES</th>
+            <th style="text-align:right;padding:8px 12px;color:#71717a;font-size:0.65rem;letter-spacing:0.08em;font-weight:600;text-transform:uppercase;">TEMPO (ms)</th>
+            <th style="text-align:right;padding:8px 12px;color:#71717a;font-size:0.65rem;letter-spacing:0.08em;font-weight:600;text-transform:uppercase;">DURAÇÃO</th>
+          </tr>
+        </thead>
+        <tbody id="historyTbody">
+        </tbody>
+      </table>
+      <div class="history-footer" style="display:flex;justify-content:flex-end;gap:8px;margin-top:24px;">
+        <button id="exportCsvBtn" class="btn" style="border:1px solid var(--mode-color);color:var(--mode-color);background:rgba(var(--mode-color-rgb,255,113,57),0.08);">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="12 17 9 14 12 11"/></svg>
+          EXPORTAR CSV
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div id="stressFlicker"></div>
+
+  <!-- Container de Toast Notifications (HUD) -->
+  <div id="toastContainer" class="toast-container"></div>
+
+  <div id="presentOverlay">
+    <div id="presentHud">
+      <div id="presentTitle">PHYSICS_SIM</div>
+      <div id="presentMeta">
+        <span id="presentMode">—</span>
+        <span class="present-sep">·</span>
+        <span id="presentN">—</span>
+        <span class="present-sep">·</span>
+        <span id="presentComp">0 comp.</span>
+        <span class="present-sep">·</span>
+        <span id="presentCollisions">0 colisões</span>
+      </div>
+    </div>
+    <div id="presentEscHint"><kbd>Esc</kbd> ou <kbd>P</kbd> para sair</div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/Pass.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+  <script type="module" src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>
