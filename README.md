@@ -87,7 +87,7 @@ Intersecção **AABB** (*Axis-Aligned Bounding Box*) testando sobreposição nos
 
 ```bash
 # Instalar dependência
-pip install flask
+python -m pip install flask
 
 # Executar servidor
 python app.py
