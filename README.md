@@ -2,8 +2,9 @@
 
 Ferramenta de demonstração empírica e telemetria em tempo real para algoritmos de *Broad-Phase* em física 3D. Compara a eficiência de Força Bruta $O(n^2)$, Grade Espacial Uniforme $O(n)$ e Octree 3D $O(n \log n)$ através de medição por frame com `performance.now()` e renderização de curvas assintóticas comparativas.
 
-Construído em JavaScript vanilla (ES6+) com Three.js r128, sem *build* step nem dependências externas além de CDN.
 ![lp](screenshot.png)
+
+Construído em JavaScript vanilla (ES6+) com Three.js r128, sem *build* step nem dependências externas além de CDN.
 ---
 
 ## Arquitetura & Algoritmos
