@@ -24,6 +24,7 @@ export const state = {
   isHeatmapEnabled: false,
   typingInterval: null,
   lastComparisonCount: 0,
+  lastExecutionTime: 0,
   spatialGrid: null,
   octreeSimulator: null,
   currentBroadPhase: 'brute',
@@ -507,6 +508,8 @@ export function detectCollisions() {
 
   state.activeCollisions = localActiveCollisions;
   state.lastComparisonCount = comparisons;
+  // Grava diretamente o tempo de execução do frame (broad-phase + narrow-phase) em ms
+  state.lastExecutionTime = pureComputeTime;
 
   newPairs.forEach(key => {
     const [id1, id2] = key.split('-');

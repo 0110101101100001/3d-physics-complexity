@@ -468,7 +468,10 @@ function formatDuration(ms) {
 }
 
 function addOrUpdateHistoryEntry() {
-  const avgTime = getAverageTime(state.cubes.length) || 0;
+  // Acessa state.lastExecutionTime dinamicamente no momento do registro (valor vivo, não amostrado)
+  const currentMs = typeof state.lastExecutionTime === 'number'
+    ? Number(state.lastExecutionTime.toFixed(4))
+    : 0;
   const elapsedSec = Math.floor((Date.now() - sessionStartTime) / 1000);
   const minutes = String(Math.floor(elapsedSec / 60)).padStart(2, '0');
   const seconds = String(elapsedSec % 60).padStart(2, '0');
@@ -486,7 +489,7 @@ function addOrUpdateHistoryEntry() {
     cellSize: cellSizeVal,
     octreeDepth: octreeDepthVal,
     collisions: state.collisionCount,
-    timeMs: avgTime,
+    timeMs: currentMs, // Captura o valor vivo e atualizado de state.lastExecutionTime
     duration: durationStr,
   };
 
