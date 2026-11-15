@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "clipped-overflow-container",
+        "value": "*",
+        "files": [
+          "C:/Users/Kaique/Desktop/3d-physics-complexity-main/templates/simulador.html"
+        ],
+        "createdAt": "2026-11-13T00:49:29.134Z",
+        "reason": "model triage: full-screen app shell; overflow hidden on html/body predates the redesign and stops the page from scrolling under the fixed 3D canvas; no tooltip or menu is clipped by it"
+      }
+    ]
+  }
+}

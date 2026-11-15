@@ -1,0 +1,108 @@
+/*
+  Transições do transitions.dev (https://transitions.dev, licença em LICENSE-transitions-dev).
+  CSS copiado das receitas sem alterar seletores; só o bloco "adaptação" no fim é deste projeto.
+
+  - 18 Texts reveal  (.t-stagger / .t-stagger-line): títulos, textos e cards das seções entram em
+    cascata, com desfoque, na primeira vez que aparecem na tela. As classes são postas por
+    transitions.js, então sem script (ou com movimento reduzido) nada fica escondido.
+  - 04 Text states swap (.t-text-swap): a nota sob o bloco de código troca de frase subindo com blur.
+*/
+
+:root {
+  /* 18 Texts reveal */
+  --stagger-dur: 500ms;
+  --stagger-distance: 12px;
+  --stagger-stagger: 40ms;
+  --stagger-blur: 3px;
+  --stagger-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  /* 04 Text states swap */
+  --text-swap-dur: 150ms;
+  --text-swap-translate-y: 4px;
+  --text-swap-blur: 2px;
+  --text-swap-ease: ease-in-out;
+}
+
+/* ---------------------------------------------------------------- 18 Texts reveal */
+/* Lines start translated down + blurred + invisible; .is-shown
+   on the parent flips them to their resting state. The second
+   line's transition-delay holds it back by --stagger-stagger
+   so the eye lands on the headline first. */
+.t-stagger-line {
+  display: block;
+  opacity: 0;
+  transform: translateY(var(--stagger-distance));
+  filter: blur(var(--stagger-blur));
+  transition:
+    opacity   var(--stagger-dur) var(--stagger-ease),
+    transform var(--stagger-dur) var(--stagger-ease),
+    filter    var(--stagger-dur) var(--stagger-ease);
+  will-change: transform, opacity, filter;
+}
+.t-stagger-line--2 { transition-delay: var(--stagger-stagger); }
+
+.t-stagger.is-shown .t-stagger-line {
+  opacity: 1;
+  transform: translateY(0);
+  filter: blur(0);
+}
+/* Exit decouples from the stagger: same fade for every line,
+   no Y return, no blur — so the disappearance reads as a
+   single quiet fade instead of a reverse reveal. */
+.t-stagger.is-hiding .t-stagger-line {
+  opacity: 0;
+  transform: translateY(0);
+  filter: blur(0);
+  transition:
+    opacity 200ms ease,
+    transform 0s linear,
+    filter 0s linear;
+  transition-delay: 0s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .t-stagger-line { transition: none !important; }
+}
+
+/* ---------------------------------------------------------------- 04 Text states swap */
+.t-text-swap {
+  display: inline-block;
+  transform: translateY(0);
+  filter: blur(0);
+  opacity: 1;
+  transition:
+    transform var(--text-swap-dur) var(--text-swap-ease),
+    filter    var(--text-swap-dur) var(--text-swap-ease),
+    opacity   var(--text-swap-dur) var(--text-swap-ease);
+  will-change: transform, filter, opacity;
+}
+.t-text-swap.is-exit {
+  transform: translateY(calc(var(--text-swap-translate-y) * -1));
+  filter: blur(var(--text-swap-blur));
+  opacity: 0;
+}
+.t-text-swap.is-enter-start {
+  transform: translateY(var(--text-swap-translate-y));
+  filter: blur(var(--text-swap-blur));
+  opacity: 0;
+  transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .t-text-swap { transition: none !important; }
+}
+
+/* ---------------------------------------------------------------- adaptação a esta página */
+/* mais linhas na cascata (a receita traz só a --2): cada uma 40ms depois da anterior */
+.t-stagger-line--3 { transition-delay: calc(var(--stagger-stagger) * 2); }
+.t-stagger-line--4 { transition-delay: calc(var(--stagger-stagger) * 3); }
+.t-stagger-line--5 { transition-delay: calc(var(--stagger-stagger) * 4); }
+.t-stagger-line--6 { transition-delay: calc(var(--stagger-stagger) * 5); }
+.t-stagger-line--7 { transition-delay: calc(var(--stagger-stagger) * 6); }
+.t-stagger-line--8 { transition-delay: calc(var(--stagger-stagger) * 7); }
+/* os cards e as perguntas mantêm o próprio layout (a receita força display: block) */
+.card.t-stagger-line, .frame.t-stagger-line { display: flex; }
+.faq > .faq__item.t-stagger-line { display: grid; }
+/* a captura impressa mostra tudo */
+@media print {
+  .t-stagger-line { opacity: 1 !important; transform: none !important; filter: none !important; }
+}

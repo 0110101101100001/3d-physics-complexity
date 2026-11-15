@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "clipped-overflow-container",
+        "value": "*",
+        "files": [
+          "C:/Users/Kaique/Desktop/3d-physics-complexity-main/templates/index.html"
+        ],
+        "createdAt": "2026-11-12T20:28:18.137Z",
+        "reason": "model triage: the overflow clip on body comes from the taste-skill kit's system.css, which clips horizontal overflow on purpose so the page never scrolls sideways; no tooltip or menu needs to escape it"
+      }
+    ]
+  }
+}

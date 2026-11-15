@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Simulador PHYSICS_SIM: Força Bruta, Grade Espacial e Octree</title>
+  <meta name="description" content="Cena 3D com até 150 cubos para comparar algoritmos de broad-phase, com tempo medido por frame e exportação em CSV.">
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/style.css">
+  <link rel="stylesheet" href="/static/css/components.css">
+</head>
+<body data-mode="brute">
+
+  <!-- BARRA SUPERIOR: marca, estratégia (o controle principal) e ferramentas -->
+  <header id="topBar">
+    <a href="/" class="topbar-home" title="Página inicial">
+      <span class="topbar-dot" aria-hidden="true"></span>
+      <span class="topbar-logo">PHYSICS_SIM</span>
+      <span class="topbar-version">v2.6</span>
+    </a>
+
+    <div class="mode-switch" role="group" aria-label="Estratégia de broad-phase">
+      <button type="button" class="mode-key" data-mode="brute" aria-pressed="true">
+        <span class="mode-key__name">Força bruta</span><span class="mode-key__o">O(n²)</span>
+      </button>
+      <button type="button" class="mode-key" data-mode="grid" aria-pressed="false">
+        <span class="mode-key__name">Grade espacial</span><span class="mode-key__o">O(n)</span>
+      </button>
+      <button type="button" class="mode-key" data-mode="octree" aria-pressed="false">
+        <span class="mode-key__name">Octree</span><span class="mode-key__o">O(n log n)</span>
+      </button>
+    </div>
+
+    <div class="topbar-tools">
+      <button type="button" id="minimizeBtn" class="tool" aria-pressed="false" aria-label="Controles" title="Mostrar ou esconder os controles">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>
+        <span class="tool__label">Controles</span>
+      </button>
+      <button type="button" id="toggleChartBtn" class="tool" aria-pressed="false" aria-label="Telemetria" title="Mostrar ou esconder a telemetria">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+        <span class="tool__label">Telemetria</span>
+      </button>
+      <button type="button" id="raceBtn" class="tool" aria-pressed="false" aria-label="Corrida" title="Corrida: as três estratégias lado a lado (C)">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16M15 4v16"/></svg>
+        <span class="tool__label">Corrida</span>
+      </button>
+      <button type="button" id="benchTopbarBtn" class="tool" aria-label="Benchmark" title="Rodar o benchmark (B)">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
+        <span class="tool__label">Benchmark</span>
+      </button>
+      <button type="button" id="presentBtn" class="tool" aria-pressed="false" aria-label="Apresentar" title="Modo apresentação (P)">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+        <span class="tool__label">Apresentar</span>
+      </button>
+      <button type="button" id="soundBtn" class="tool" aria-pressed="true" aria-label="Som" title="Ligar ou desligar o som">
+        <svg id="soundIconOn" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+        <svg id="soundIconOff" viewBox="0 0 24 24" aria-hidden="true" style="display:none"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="m23 9-6 6M17 9l6 6"/></svg>
+        <span class="tool__label" id="soundLabel">Som</span>
+      </button>
+      <button type="button" id="theoryBtn" class="tool" aria-label="Teoria" title="Abrir a teoria">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5v14z"/><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5"/></svg>
+        <span class="tool__label">Teoria</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- TRILHO ESQUERDO: controles -->
+  <aside id="controlPanel" class="rail panel-hidden" aria-label="Controles">
+    <section class="rail-section">
+      <h2 class="rail-title">Cena</h2>
+      <div class="control-group">
+        <div class="control-head">
+          <label for="cubeCount">Cubos</label>
+          <input type="number" id="cubeCountInput" min="2" max="20" value="8" autocomplete="off" aria-label="Número de cubos">
+        </div>
+        <input type="range" id="cubeCount" min="2" max="20" value="8" autocomplete="off">
+      </div>
+      <div class="control-group">
+        <div class="control-head">
+          <label for="speed">Velocidade</label>
+          <output id="speedValue" for="speed">0.8×</output>
+        </div>
+        <input type="range" id="speed" min="0.2" max="2" step="0.1" value="0.8" autocomplete="off">
+      </div>
+      <div class="checkbox-row">
+        <label class="checkbox-label">
+          <input type="checkbox" id="showGrid" checked autocomplete="off">
+          <span>Grade do chão</span>
+        </label>
+        <label class="checkbox-label" title="Linhas de teste, gizmos e colisões emitem luz. Desligue se a cena ficar lenta.">
+          <input type="checkbox" id="bloomToggle" checked autocomplete="off">
+          <span>Brilho neon</span>
+        </label>
+      </div>
+    </section>
+
+    <section class="rail-section">
+      <h2 class="rail-title">Estrutura espacial</h2>
+      <div class="control-group">
+        <div class="control-head">
+          <label for="cellSize">Célula da grade</label>
+          <input type="number" id="cellSizeInput" min="1" max="10" step="0.5" value="2" autocomplete="off" aria-label="Tamanho da célula da grade">
+        </div>
+        <input type="range" id="cellSize" min="1" max="10" step="0.5" value="2" autocomplete="off">
+      </div>
+      <div class="control-group">
+        <div class="control-head">
+          <label for="octreeDepth">Profundidade da Octree</label>
+          <input type="number" id="octreeDepthInput" min="1" max="10" step="1" value="6" autocomplete="off" aria-label="Profundidade máxima da Octree">
+        </div>
+        <input type="range" id="octreeDepth" min="1" max="10" step="1" value="6" autocomplete="off">
+      </div>
+      <!-- A estratégia é escolhida nas teclas da barra superior; este select guarda o valor para o script -->
+      <select id="broadPhaseSelect" autocomplete="off" hidden>
+        <option value="brute">Força Bruta O(n²)</option>
+        <option value="grid">Grade Espacial Uniforme O(n)</option>
+        <option value="octree">Particionamento Hierárquico O(n log n)</option>
+      </select>
+    </section>
+
+    <section class="rail-section">
+      <h2 class="rail-title">Ações</h2>
+      <div class="btn-grid">
+        <button type="button" id="toggleBtn" class="btn">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+          <span id="toggleLabel">Pausar</span>
+        </button>
+        <button type="button" id="resetBtn" class="btn">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+          Reiniciar
+        </button>
+        <button type="button" id="wireframeBtn" class="btn">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="M3.3 7 12 12l8.7-5M12 22V12"/></svg>
+          Wireframe
+        </button>
+        <button type="button" id="physicsBtn" class="btn">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+          Física real
+        </button>
+        <button type="button" id="stressBtn" class="btn">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+          Stress test
+        </button>
+        <button type="button" id="captureBtn" class="btn" title="Salvar uma imagem da cena">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="12" cy="12" r="3"/></svg>
+          Capturar
+        </button>
+        <button type="button" id="historyCsvBtn" class="btn btn-wide">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18M3 12h18M3 19h18M9 5v14"/></svg>
+          Histórico da sessão
+        </button>
+      </div>
+    </section>
+  </aside>
+
+  <!-- TRILHO DIREITO: telemetria -->
+  <aside id="chartPanel" class="rail chart-hidden" aria-label="Telemetria">
+    <div id="chartStats" class="readouts">
+      <div class="readout">
+        <span class="readout__value" id="statComp">—</span>
+        <span class="readout__label">pares por frame</span>
+      </div>
+      <div class="readout">
+        <span class="readout__value" id="statTime">—</span>
+        <span class="readout__label">tempo médio</span>
+      </div>
+    </div>
+
+    <section class="rail-section">
+      <h2 class="rail-title">Curvas teóricas por número de cubos</h2>
+      <canvas id="perfChart" width="280" height="200" role="img" aria-label="Gráfico das curvas teóricas de crescimento do tempo de detecção em função do número de cubos, para as três estratégias"></canvas>
+      <ul id="chartLegend">
+        <li class="legend-item" data-mode="brute">Força bruta</li>
+        <li class="legend-item" data-mode="grid">Grade</li>
+        <li class="legend-item" data-mode="octree">Octree</li>
+      </ul>
+      <p class="chart-note">A linha vertical marca o N atual.</p>
+    </section>
+
+    <section class="rail-section">
+      <h2 class="rail-title">Custo por fase</h2>
+      <div id="phaseBar" class="phase-bar" role="img" aria-label="Divisão do tempo de detecção entre montar a estrutura e consultar os pares">
+        <span class="phase-bar__build" id="phaseBuildFill"></span>
+        <span class="phase-bar__query"></span>
+      </div>
+      <dl class="phase-list">
+        <div class="phase-row" data-phase="build">
+          <dt>Montar a estrutura</dt>
+          <dd><span id="phaseBuildMs">—</span><span class="phase-pct" id="phaseBuildPct">—</span></dd>
+        </div>
+        <div class="phase-row" data-phase="query">
+          <dt>Consultar e testar pares</dt>
+          <dd><span id="phaseQueryMs">—</span><span class="phase-pct" id="phaseQueryPct">—</span></dd>
+        </div>
+      </dl>
+      <p class="chart-note" id="phaseNote">Média dos últimos 180 frames.</p>
+    </section>
+
+    <section class="rail-section">
+      <h2 class="rail-title">Estratégia ativa</h2>
+      <dl class="context">
+        <dt>Algoritmo</dt>
+        <dd id="context-algorithm">AABB — Axis-Aligned Bounding Box</dd>
+        <dt>Pior caso</dt>
+        <dd id="context-worstcase">O(n²) — verificação por força bruta</dd>
+        <dt>Operação básica</dt>
+        <dd id="context-op">Sobreposição nos eixos X, Y e Z</dd>
+      </dl>
+    </section>
+
+    <details class="rail-section pseudo" open>
+      <summary class="rail-title">Pseudocódigo</summary>
+      <pre id="pseudoCode" tabindex="0" aria-label="Pseudocódigo da estratégia ativa"></pre>
+    </details>
+  </aside>
+
+  <!-- BENCHMARK: abre embaixo, no centro, com as três estratégias lado a lado -->
+  <section id="benchWidget" aria-label="Benchmark">
+    <header class="bench-widget-header">
+      <h2 class="bench-widget-title">Benchmark</h2>
+      <span id="benchWidgetN" class="bench-widget-n">—</span>
+      <span class="bench-widget-info" tabindex="0" aria-label="Como ler o benchmark">
+        ?
+        <span class="bench-widget-tooltip">
+          <strong>Tempo:</strong> média de pelo menos 20 execuções da detecção na cena atual, medida com <code>performance.now()</code>. As execuções se repetem até somar tempo suficiente para vencer a resolução do relógio do navegador.<br><br>
+          <strong>Fases:</strong> a barra separa o tempo de montar a estrutura (trecho claro) do tempo de consultar e testar os pares (trecho cheio).<br><br>
+          <strong>Pares:</strong> quantos pares de cubos foram testados com AABB num frame. A força bruta testa N(N−1)/2; a grade e a Octree reduzem esse número.<br><br>
+          <strong>Ajuste empírico:</strong> mede cenas sintéticas de 10 a 150 cubos e ajusta t = a·n<sup>k</sup> por mínimos quadrados em escala log-log. O expoente k é a inclinação da reta.
+        </span>
+      </span>
+      <button type="button" id="benchWidgetRerun" class="btn btn--small">Rodar de novo</button>
+      <button type="button" id="benchWidgetClose" class="icon-btn" aria-label="Fechar o benchmark">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+      </button>
+    </header>
+    <div id="benchWidgetRows"></div>
+    <div id="benchFit" class="bench-fit">
+      <div class="bench-fit-head">
+        <h3 class="bench-fit-title">Ajuste empírico da curva</h3>
+        <span id="benchFitStatus" class="bench-fit-status" role="status">—</span>
+      </div>
+      <div class="bench-fit-body">
+        <svg id="fitChart" class="fit-chart" viewBox="0 0 280 140" role="img" aria-label="Tempo de detecção por número de cubos em escala log-log, com a reta ajustada de cada estratégia"></svg>
+        <ul id="benchFitList" class="fit-list"></ul>
+      </div>
+      <p class="bench-fit-note">Cenas sintéticas com a arena e os tamanhos de cubo do simulador. Como a arena é fixa, a cena fica mais densa conforme N cresce, e a grade e a Octree medem acima do caso médio teórico.</p>
+    </div>
+  </section>
+
+  <!-- CORRIDA: uma coluna por estratégia, sobre a mesma cena -->
+  <div id="raceOverlay" aria-label="Corrida entre as três estratégias">
+    <section class="race-col" data-mode="brute">
+      <div class="race-card">
+        <header class="race-card__head">
+          <span class="race-card__name">Força bruta</span>
+          <span class="race-card__o">O(n²)</span>
+          <span class="race-card__rank" data-race="rank">—</span>
+        </header>
+        <div class="race-card__nums">
+          <span><strong data-race="pairs">—</strong> pares</span>
+          <span><strong data-race="time">—</strong></span>
+        </div>
+        <div class="race-card__track"><div class="race-card__fill" data-race="fill"><span class="phase-bar__build" data-race="build"></span><span class="phase-bar__query"></span></div></div>
+      </div>
+    </section>
+    <section class="race-col" data-mode="grid">
+      <div class="race-card">
+        <header class="race-card__head">
+          <span class="race-card__name">Grade espacial</span>
+          <span class="race-card__o">O(n)</span>
+          <span class="race-card__rank" data-race="rank">—</span>
+        </header>
+        <div class="race-card__nums">
+          <span><strong data-race="pairs">—</strong> pares</span>
+          <span><strong data-race="time">—</strong></span>
+        </div>
+        <div class="race-card__track"><div class="race-card__fill" data-race="fill"><span class="phase-bar__build" data-race="build"></span><span class="phase-bar__query"></span></div></div>
+      </div>
+    </section>
+    <section class="race-col" data-mode="octree">
+      <div class="race-card">
+        <header class="race-card__head">
+          <span class="race-card__name">Octree</span>
+          <span class="race-card__o">O(n log n)</span>
+          <span class="race-card__rank" data-race="rank">—</span>
+        </header>
+        <div class="race-card__nums">
+          <span><strong data-race="pairs">—</strong> pares</span>
+          <span><strong data-race="time">—</strong></span>
+        </div>
+        <div class="race-card__track"><div class="race-card__fill" data-race="fill"><span class="phase-bar__build" data-race="build"></span><span class="phase-bar__query"></span></div></div>
+      </div>
+    </section>
+  </div>
+
+  <!-- RODAPÉ: leituras sempre visíveis e atalhos -->
+  <footer id="statusBar">
+    <div class="status-readouts">
+      <span class="status-item"><strong id="tbObjects">—</strong> cubos</span>
+      <span class="status-item"><span id="badgeIndicator" aria-hidden="true"></span><strong id="badgeText">0</strong> colisões</span>
+      <span class="status-item economy-badge disabled"><strong id="econVal">0%</strong> dos testes evitados</span>
+      <span class="status-flag" id="pauseBadge">Pausado</span>
+      <span class="status-flag" id="stressBadge">Stress test</span>
+    </div>
+    <div class="shortcuts-bar" aria-label="Atalhos de teclado">
+      <span><kbd>Espaço</kbd> pausar</span>
+      <span><kbd>R</kbd> reiniciar</span>
+      <span><kbd>S</kbd> stress test</span>
+      <span><kbd>W</kbd> wireframe</span>
+      <span><kbd>X</kbd> raio-X (segure)</span>
+      <span><kbd>T</kbd> rastro</span>
+      <span><kbd>C</kbd> corrida</span>
+      <span><kbd>P</kbd> apresentar</span>
+      <span><kbd>B</kbd> benchmark</span>
+    </div>
+  </footer>
+
+  <!-- MODAL: teoria -->
+  <div id="theoryModal" class="modal hidden">
+    <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="theoryTitle">
+      <header class="modal-header">
+        <h2 id="theoryTitle">Teoria</h2>
+        <button type="button" id="closeTheoryBtn" class="icon-btn" aria-label="Fechar a teoria">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+        </button>
+      </header>
+      <div class="theory-editorial">
+        <div class="theory-block">
+          <h3>O problema: colisões cegas</h3>
+          <p>Em simulações 3D densas, testar colisões objeto a objeto esgota rapidamente a CPU. Usamos <strong>AABB (Axis-Aligned Bounding Box)</strong>, a caixa alinhada aos eixos, como operação básica de intersecção nos eixos X, Y e Z. O desafio da fase <em>broad-phase</em> é reduzir a quantidade desses testes por frame, eliminando pares impossíveis antes da verificação detalhada.</p>
+        </div>
+        <div class="theory-block">
+          <h3>Força Bruta, O(n²)</h3>
+          <p>Testa as fronteiras de cada objeto contra todos os outros objetos da cena. O número exato de comparações é <strong>N × (N − 1) / 2</strong>. Não tem custo de inicialização, mas o crescimento quadrático a torna insustentável para grandes volumes de objetos.</p>
+        </div>
+        <div class="theory-block">
+          <h3>Grade Espacial Uniforme, O(n)</h3>
+          <p>Mapeia o espaço 3D em células de tamanho fixo. Atinge a complexidade <strong>O(n)</strong> no caso médio indexando os objetos numa tabela hash e testando colisões apenas entre os que dividem uma célula. É muito rápida, mas degrada para O(n²) se muitos objetos se aglomerarem numa única célula.</p>
+        </div>
+        <div class="theory-block">
+          <h3>Octree, O(n log n)</h3>
+          <p>Estrutura hierárquica que subdivide o espaço 3D em 8 octantes, recursivamente. Usa <strong>retenção no nó pai</strong>: se a caixa de um objeto não cabe inteira num filho, o objeto fica no nó atual em vez de ser duplicado, o que elimina o <em>straddling problem</em>. Na busca, os objetos dos nós ancestrais são testados contra os dos descendentes cuja região eles tocam.</p>
+        </div>
+        <div class="theory-block">
+          <h3>Constantes ocultas e ponto de cruzamento</h3>
+          <p>A notação Big-O ignora constantes. Porém a Grade e a Octree gastam tempo de CPU montando a estrutura a cada frame. Para valores pequenos de <strong>N</strong>, esse <em>overhead</em> deixa a Força Bruta mais rápida, até as curvas se cruzarem.</p>
+        </div>
+        <div class="theory-block">
+          <h3>Custo por fase e expoente medido</h3>
+          <p>O tempo de detecção tem duas partes: <strong>montar a estrutura</strong> e <strong>consultar os pares</strong>. A Força Bruta só tem a segunda; a Grade e a Octree pagam a primeira a cada frame para encolher a segunda. O benchmark também ajusta <strong>t = a·n<sup>k</sup></strong> aos tempos medidos: em escala log-log a curva vira uma reta, e a inclinação dela é o expoente <strong>k</strong>, que pode ser comparado com o teórico.</p>
+        </div>
+        <div class="theory-block">
+          <h3>O que a telemetria mostra</h3>
+          <p>A simulação confirma a teoria: conforme N cresce, o tempo quadrático da Força Bruta acaba superado pelas abordagens espaciais, o que aparece no benchmark e na corrida. Não existe um vencedor absoluto. O algoritmo ideal depende da relação entre a densidade espacial dos objetos e o valor de <strong>N</strong> na aplicação real.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: histórico da sessão -->
+  <div id="historyCsvModal" class="modal hidden">
+    <div class="modal-content modal-content--wide" role="dialog" aria-modal="true" aria-labelledby="historyTitle">
+      <header class="modal-header">
+        <div>
+          <h2 id="historyTitle">Histórico da sessão</h2>
+          <p class="modal-lead">Uma linha por configuração de cena. A linha atual é atualizada enquanto a simulação roda.</p>
+        </div>
+        <button type="button" id="closeHistoryCsvBtn" class="icon-btn" aria-label="Fechar o histórico">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+        </button>
+      </header>
+      <div class="table-scroll">
+        <table id="historyTable" class="data-table">
+          <thead>
+            <tr>
+              <th scope="col">Rodada</th>
+              <th scope="col" class="num">Cubos</th>
+              <th scope="col">Algoritmo</th>
+              <th scope="col" class="num">Velocidade</th>
+              <th scope="col" class="num">Célula</th>
+              <th scope="col" class="num">Profundidade</th>
+              <th scope="col" class="num">Colisões</th>
+              <th scope="col" class="num">Tempo (ms)</th>
+              <th scope="col" class="num">Duração</th>
+            </tr>
+          </thead>
+          <tbody id="historyTbody"></tbody>
+        </table>
+      </div>
+      <footer class="modal-footer">
+        <button type="button" id="exportCsvBtn" class="btn btn--primary">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>
+          Exportar CSV
+        </button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- Avisos rápidos -->
+  <div id="toastContainer" class="toast-container" role="status" aria-live="polite"></div>
+
+  <!-- HUD do modo apresentação -->
+  <div id="presentOverlay">
+    <div id="presentHud">
+      <span id="presentMode">—</span>
+      <span id="presentN">—</span>
+      <span id="presentComp">0 comp.</span>
+      <span id="presentCollisions">0 colisões</span>
+    </div>
+    <div id="presentEscHint"><kbd>Esc</kbd> ou <kbd>P</kbd> para sair</div>
+  </div>
+
+  <!-- Elementos de estado usados pelo script, sem representação visual -->
+  <div id="collisionBadge" hidden></div>
+  <div id="stressFlicker" hidden></div>
+
+  <!-- Scripts -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/Pass.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+  <script type="module" src="/static/js/main.js"></script>
+</body>
+</html>
