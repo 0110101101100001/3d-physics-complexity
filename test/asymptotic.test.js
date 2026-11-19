@@ -9,7 +9,6 @@ import { gridQueryWork } from '../static/js/theorem-checks.js';
 
 const theory = Object.fromEntries(THEORY.map(t => [t.id, t.f]));
 const ok = measureAsymptotic();
-const bad = measureAsymptotic({ violate: true });
 
 test('c_g = m·K e a cena da grade respeita m = 8 e K = 8', () => {
   assert.equal(CONSTANTS.cg, CONSTANTS.m * CONSTANTS.K);
@@ -40,11 +39,12 @@ test('com as hipóteses, as medições ficam abaixo da curva do teorema', () => 
   for (const p of ok.octree.filter(q => q.n >= 64)) assert.ok(p.ops <= theory.octree(p.n), `octree n=${p.n}`);
 });
 
-test('violando as hipóteses, as medições sobem para n(n−1)/2', () => {
-  for (const key of ['brute', 'grid', 'octree', 'sap']) {
-    for (const p of bad[key].filter(q => q.n >= 100)) {
-      const r = p.ops / theory.brute(p.n);
-      assert.ok(r >= 1 && r < 1.2, `${key} n=${p.n}: ${r}`);
+test('cada estratégia tem medições a até uma década da sua curva teórica', () => {
+  for (const key of ['brute', 'grid', 'octree', 'sap', 'sapH2']) {
+    assert.ok(ok[key].length > 0, key);
+    for (const p of ok[key].filter(q => q.n >= 100)) {
+      const d = Math.abs(Math.log10(p.ops / theory[key](p.n)));
+      assert.ok(d <= 1, `${key} n=${p.n}: ${d.toFixed(2)} décadas`);
     }
   }
 });

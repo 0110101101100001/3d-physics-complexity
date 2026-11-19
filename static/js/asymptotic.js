@@ -8,7 +8,7 @@ import {
   plainCube, mulberry32, createBoxScene, intersectAABB,
   SpatialGrid, OctreeSimulator, SweepAndPrune,
 } from './broadphase.js';
-import { octreeBuildWork, gridQueryWork, stackedScene, sapColumnScene } from './theorem-checks.js';
+import { octreeBuildWork, gridQueryWork } from './theorem-checks.js';
 
 const LOG2 = Math.log(2);
 const LOG8 = Math.log(8);
@@ -90,12 +90,6 @@ export function octreePointScene(n, rand) {
     plainCube(i, 1e-6, rand() * OCT_L, rand() * OCT_L, rand() * OCT_L));
 }
 
-// Octree, contraexemplo: todos agrupados num ponto. Com D fixo, ficam numa folha só.
-export function octreeClusterScene(n, rand) {
-  return Array.from({ length: n }, (_, i) =>
-    plainCube(i, 1e-9, 10.3 + rand() * 1e-4, 10.7 + rand() * 1e-4, 10.1 + rand() * 1e-4));
-}
-
 // Sweep and Prune: lado 1 a cada 0,4 em X, em ordem embaralhada. Só vizinhos a até 2
 // posições se sobrepõem em X: k = 2n − 3 ≤ α·n.
 export function sapLineScene(n, rand) {
@@ -146,7 +140,6 @@ function countSap(cubes, rand) {
   let k = 0;
   sap.forEachCandidatePair(() => k++);
   const first = comparisons + k;
-  if (!rand) return { first };
   for (const c of cubes) {
     c.mesh.position.x += (rand() - 0.5) * 0.1;
     c.aabb.min.x = c.mesh.position.x - c.size / 2;
@@ -159,30 +152,20 @@ function countSap(cubes, rand) {
 }
 
 export const MEASURE_SIZES = [10, 100, 1000, 10000, 100000];
-export const VIOLATE_SIZES = [10, 100, 1000, 10000];   // n² operações: 10⁵ seria 5·10⁹
 
-// Medições de um regime: { brute: [{n, ops}], grid, octree, sap, sapH2 }
-export function measureAsymptotic({ violate = false, onProgress } = {}) {
-  const sizes = violate ? VIOLATE_SIZES : MEASURE_SIZES;
+// Contagens em cenas que respeitam as hipóteses: { brute: [{n, ops}], grid, octree, sap, sapH2 }
+export function measureAsymptotic({ onProgress } = {}) {
+  const sizes = MEASURE_SIZES;
   const out = { brute: [], grid: [], octree: [], sap: [], sapH2: [] };
   sizes.forEach((n, index) => {
-    onProgress?.({ violate, n, index, total: sizes.length });
-    const rand = mulberry32(n * 31 + (violate ? 7 : 0));
-    if (n <= 10000) {
-      const scene = violate ? stackedScene(n) : createBoxScene(n, 40 * Math.cbrt(n / 150), rand);
-      out.brute.push({ n, ops: countBrute(scene) });
-    }
-    out.grid.push({ n, ops: countGrid(violate ? stackedScene(n) : gridCornerScene(n)) });
-    out.octree.push({
-      n, ops: violate ? countOctree(octreeClusterScene(n, rand), C.D) : countOctree(octreePointScene(n, rand), 40),
-    });
-    if (violate) {
-      out.sap.push({ n, ops: countSap(sapColumnScene(n)).first });
-    } else {
-      const { first, coherent } = countSap(sapLineScene(n, rand), rand);
-      out.sap.push({ n, ops: first });
-      out.sapH2.push({ n, ops: coherent });
-    }
+    onProgress?.({ n, index, total: sizes.length });
+    const rand = mulberry32(n * 31);
+    if (n <= 10000) out.brute.push({ n, ops: countBrute(createBoxScene(n, 40 * Math.cbrt(n / 150), rand)) });
+    out.grid.push({ n, ops: countGrid(gridCornerScene(n)) });
+    out.octree.push({ n, ops: countOctree(octreePointScene(n, rand), 40) });
+    const { first, coherent } = countSap(sapLineScene(n, rand), rand);
+    out.sap.push({ n, ops: first });
+    out.sapH2.push({ n, ops: coherent });
   });
   return out;
 }

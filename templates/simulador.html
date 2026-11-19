@@ -196,21 +196,24 @@
 
     <section class="rail-section">
       <h2 class="rail-title">Crescimento por número de cubos</h2>
-      <label class="chart-toggle"><input type="checkbox" id="chartViolate"> violar hipóteses</label>
-      <canvas id="perfChart" width="560" height="500" role="img" aria-label="Gráfico log-log do número de operações em função do número de cubos, de 10 a 10 milhões: curvas teóricas tracejadas de cada estratégia e contagens medidas"></canvas>
+      <svg id="perfChart" class="asym-chart" viewBox="0 0 300 270" role="img" aria-label="Gráfico log-log do número de operações (testes de par + inserções) em função do número de cubos, de 10 a 10 milhões: curvas teóricas tracejadas de cada estratégia, contagens medidas e cruzamentos numerados"></svg>
       <ul id="chartLegend">
         <li class="legend-item" data-mode="brute">Força bruta</li>
         <li class="legend-item" data-mode="grid">Grade</li>
         <li class="legend-item" data-mode="octree">Octree</li>
         <li class="legend-item" data-mode="sap">Sweep and prune</li>
       </ul>
-      <p class="chart-key">Tracejado: teoria. Tracejado claro: curva secundária (Octree sob H<sub>D</sub>; SAP sob H2). Ponto cheio: medido. Ponto vazado: SAP medido no frame seguinte. Triângulos: inclinação 1 e 2.</p>
-      <p class="chart-note" id="chartNote">As medições começam quando o painel abre.</p>
+      <p class="chart-key">Tracejado: teoria. Tracejado claro: curva secundária (Octree sob H<sub>D</sub>; SAP sob H2). Triângulos: inclinação 1 e 2. Pontos brancos numerados: cruzamentos.</p>
+      <p class="chart-key" id="chartKeyMeasured" hidden>Ponto cheio: operações contadas. Ponto vazado: SAP contado no frame seguinte, sob H2.</p>
+      <p class="chart-note" id="chartNote">As contagens começam quando o painel abre.</p>
       <h3 class="chart-subtitle">T(n)/n</h3>
-      <canvas id="perfRatioChart" width="560" height="300" role="img" aria-label="Operações por cubo, T(n)/n, com n em escala log e eixo linear: linear vira reta horizontal, n log n reta inclinada"></canvas>
+      <svg id="perfRatioChart" class="asym-chart" viewBox="0 0 300 180" role="img" aria-label="Operações por cubo, T(n)/n, com n em escala log e eixo linear: a grade é reta horizontal, n log n reta inclinada e a força bruta sai pelo topo"></svg>
       <p class="chart-note">Θ(n) vira reta horizontal, Θ(n log n) reta inclinada e Θ(n²) sai pelo topo.</p>
       <h3 class="chart-subtitle">Cruzamentos das curvas teóricas</h3>
-      <ol id="chartCrossings" class="chart-crossings"></ol>
+      <table class="chart-crossings">
+        <thead><tr><th>#</th><th>Par de curvas</th><th>n</th></tr></thead>
+        <tbody id="chartCrossings"></tbody>
+      </table>
       <h3 class="chart-subtitle">Constantes</h3>
       <dl class="chart-constants">
         <dt>Grade</dt><dd>c<sub>g</sub> = m·K = 64, com célula 2 ≥ s<sub>max</sub> = 1, m = 8 células por cubo, K = 8 cubos por célula</dd>

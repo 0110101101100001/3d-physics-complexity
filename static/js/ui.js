@@ -17,7 +17,7 @@ import {
   prepareRaceView, finishRaceViews, switchStrategy, updateDebris, glowHooks,
 } from './physics.js';
 import { STRATEGY, MODE_KEYS, strategyOf } from './strategies.js';
-import { perf, phase, resetPhases, currentAverageTime, drawChart, updatePhaseUI } from './telemetry.js';
+import { perf, phase, resetPhases, currentTimeReadout, drawChart, updatePhaseUI } from './telemetry.js';
 import { runBenchmark } from './benchmark.js';
 import { startHistorySession, addOrUpdateHistoryEntry, renderHistoryTable, exportCSV } from './history.js';
 import {
@@ -71,7 +71,7 @@ function updateUI() {
   setText(statN, state.cubes.length);
   setText(statAlgo, label);
   setText(statComp, state.lastComparisonCount.toLocaleString('pt-BR'));
-  setText(statTime, `${currentAverageTime().toFixed(3)} ms`);
+  setText(statTime, currentTimeReadout());
 }
 
 // ====================== CENA ======================

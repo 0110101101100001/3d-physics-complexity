@@ -84,260 +84,264 @@ export function currentAverageTime() {
   return store ? store.average(state.cubes.length) : 0;
 }
 
+// ====================== TEMPO MÉDIO (leitura do painel) ======================
+// Cada frame mede a detecção com performance.now(). Abaixo da resolução do relógio
+// muitos frames leem 0; a média simples de 60 frames soma esses degraus e recupera o
+// valor médio (a média aparada descartaria justamente os poucos frames não nulos).
+// Se todos os frames leram 0, só dá para dizer que o tempo ficou abaixo da resolução.
+const CLOCK_RES = (() => {
+  let best = Infinity;
+  for (let r = 0; r < 5; r++) {
+    const t0 = performance.now();
+    let t1 = t0;
+    while (t1 === t0) t1 = performance.now();
+    best = Math.min(best, t1 - t0);
+  }
+  return best;
+})();
+
+function fmtDuration(ms) {
+  if (ms < 1) {
+    const us = ms * 1000;
+    return `${us.toFixed(us < 10 ? 2 : 1).replace('.', ',')} µs`;
+  }
+  return `${ms.toFixed(2).replace('.', ',')} ms`;
+}
+
+export function currentTimeReadout() {
+  const store = perf[state.currentBroadPhase];
+  const arr = store?.samples.get(state.cubes.length);
+  if (!arr || arr.length === 0) return '—';
+  const mean = arr.reduce((s, v) => s + v, 0) / arr.length;
+  return mean > 0 ? fmtDuration(mean) : `< ${fmtDuration(CLOCK_RES)}`;
+}
+
 // ====================== GRÁFICO ASSINTÓTICO ======================
-// Log-log de N = 10 a 10⁷ contra o número de operações (testes de par + inserções), a
-// grandeza que os teoremas da "Prova de complexidade" limitam. Tracejado: as fórmulas
-// dos teoremas com as constantes declaradas em asymptotic.js. Marcadores: contagens
-// feitas no worker, nas mesmas estruturas da simulação. Abaixo, T(n)/n com n em escala
-// log e eixo y linear: Θ(n) vira reta horizontal e Θ(n log n), reta inclinada.
-const chartCanvas = document.getElementById('perfChart');
-const ratioCanvas = document.getElementById('perfRatioChart');
+// Log-log de verdade: x = log10(n), de 10 a 10⁷; y = log10(operações), com operações =
+// testes de par + inserções, a grandeza que os teoremas da "Prova de complexidade"
+// limitam. Tracejado: as fórmulas dos teoremas com as constantes de asymptotic.js.
+// Marcadores: contagens feitas no worker, nas mesmas estruturas da simulação.
+// Abaixo, T(n)/n com x em log10(n) e y linear: Θ(n) vira reta horizontal e
+// Θ(n log n), reta inclinada. Os dois gráficos são SVG com viewBox e width 100%.
+const mainSvg = document.getElementById('perfChart');
+const ratioSvg = document.getElementById('perfRatioChart');
 const chartNote = document.getElementById('chartNote');
-const crossingsList = document.getElementById('chartCrossings');
-const violateToggle = document.getElementById('chartViolate');
+const chartKeyMeasured = document.getElementById('chartKeyMeasured');
+const crossingsBody = document.getElementById('chartCrossings');
 const chartPanelEl = document.getElementById('chartPanel');
 
 const COLOR = Object.fromEntries(STRATEGIES.map(st => [st.key, st.color]));
 const NAME = {
-  brute: 'força bruta', grid: 'grade', octree: 'octree n log n', octreeD: 'octree n·D',
-  sap: 'SAP n log n + k', sapH2: 'SAP n + k (H2)',
+  brute: 'força bruta n(n−1)/2', grid: 'grade c_g·n', octree: 'octree c_o·n·log₈ n',
+  octreeD: 'octree c_o·n·D', sap: 'SAP n·log₂ n + k', sapH2: 'SAP n + k (H2)',
 };
 const CROSSINGS = theoryCrossings();
-const SCALE = 2;          // resolução interna 2x da área em CSS
-const FONT = '9px "IBM Plex Mono", monospace';
-const INK = 'rgba(255,255,255,0.55)';
-const RATIO_MAX = 70;     // topo do gráfico T(n)/n
+const RATIO_MAX = 80;     // topo do gráfico T(n)/n
+const SVG_NS = 'http://www.w3.org/2000/svg';
 
-let measuredOk = null;
-let measuredBad = null;
+let measured = null;
 let measuring = false;
-let dirty = true;
 let lastN = -1;
 
-function lx(n) { return Math.log10(n); }
+const lx = Math.log10;
 
-function setupCanvas(canvas) {
-  const ctx = canvas.getContext('2d');
-  const w = canvas.width / SCALE, h = canvas.height / SCALE;
-  ctx.setTransform(SCALE, 0, 0, SCALE, 0, 0);
-  ctx.clearRect(0, 0, w, h);
-  ctx.font = FONT;
-  return { ctx, w, h };
+function el(name, attrs = {}, text) {
+  const node = document.createElementNS(SVG_NS, name);
+  for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, v);
+  if (text !== undefined) node.textContent = text;
+  return node;
 }
 
-function pow10Label(e) {
-  const sup = { '-': '⁻', 0: '⁰', 1: '¹', 2: '²', 3: '³', 4: '⁴', 5: '⁵', 6: '⁶', 7: '⁷', 8: '⁸', 9: '⁹' };
-  return '10' + String(e).split('').map(ch => sup[ch]).join('');
+const SUP = { '-': '⁻', 0: '⁰', 1: '¹', 2: '²', 3: '³', 4: '⁴', 5: '⁵', 6: '⁶', 7: '⁷', 8: '⁸', 9: '⁹' };
+const pow10Label = e => '10' + String(e).split('').map(ch => SUP[ch]).join('');
+
+// Geometria comum: viewBox, margens e o eixo x em log10(n)
+function frame(H, mb = 30) {
+  const W = 300, ml = 40, mr = 8, mt = 8;
+  const X = n => ml + ((lx(n) - lx(N_MIN)) / (lx(N_MAX) - lx(N_MIN))) * (W - ml - mr);
+  return { W, H, ml, mr, mt, mb, X, x0: ml, x1: W - mr, y0: mt, y1: H - mb };
 }
 
-// Curva tracejada amostrada em log n, recortada à área do gráfico
-function strokeCurve(ctx, f, X, Y, theory) {
-  ctx.save();
-  ctx.strokeStyle = COLOR[theory.mode];
-  ctx.globalAlpha = theory.light ? 0.5 : 1;
-  ctx.setLineDash(theory.light ? [2, 3] : [5, 3]);
-  ctx.lineWidth = 1.3;
-  ctx.beginPath();
-  const steps = 120;
+// Grade vertical e marcas do eixo x em 10, 10², …, 10⁷
+function xAxis(g, f) {
+  for (let e = lx(N_MIN); e <= lx(N_MAX); e++) {
+    g.append(el('line', { x1: f.X(10 ** e), x2: f.X(10 ** e), y1: f.y0, y2: f.y1, class: 'ac-grid' }));
+    g.append(el('text', { x: f.X(10 ** e), y: f.y1 + 11, 'text-anchor': 'middle', class: 'ac-tick' }, pow10Label(e)));
+  }
+  g.append(el('text', { x: (f.x0 + f.x1) / 2, y: f.H - 4, 'text-anchor': 'middle', class: 'ac-label' }, 'n (cubos), escala log'));
+}
+
+function yLabel(g, f, text) {
+  const cy = (f.y0 + f.y1) / 2;
+  g.append(el('text', { x: 9, y: cy, transform: `rotate(-90 9 ${cy})`, 'text-anchor': 'middle', class: 'ac-label' }, text));
+}
+
+function clipArea(svg, f, id) {
+  const clip = el('clipPath', { id });
+  clip.append(el('rect', { x: f.x0, y: f.y0, width: f.x1 - f.x0, height: f.y1 - f.y0 }));
+  const defs = el('defs');
+  defs.append(clip);
+  svg.append(defs);
+  return el('g', { 'clip-path': `url(#${id})` });
+}
+
+// Curva teórica amostrada em log n
+function curvePath(f, Y, theory, map = v => v) {
+  const steps = 160;
+  const pts = [];
   for (let s = 0; s <= steps; s++) {
     const n = 10 ** (lx(N_MIN) + ((lx(N_MAX) - lx(N_MIN)) * s) / steps);
-    const x = X(n), y = Y(f(n), n);
-    if (s === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    pts.push(`${f.X(n).toFixed(2)},${Y(map(theory.f(n), n)).toFixed(2)}`);
   }
-  ctx.stroke();
-  ctx.restore();
+  return el('polyline', {
+    points: pts.join(' '), stroke: COLOR[theory.mode], class: theory.light ? 'ac-theory ac-theory--light' : 'ac-theory',
+  });
 }
 
-// Marcador: cheio = medido; vazado = medido no frame seguinte, sob H2
-function marker(ctx, x, y, color, hollow) {
-  ctx.beginPath();
-  ctx.arc(x, y, 2.6, 0, Math.PI * 2);
-  if (hollow) { ctx.strokeStyle = color; ctx.lineWidth = 1.2; ctx.stroke(); }
-  else { ctx.fillStyle = color; ctx.fill(); }
+// Marcador: cheio = medido; vazado = SAP medido no frame seguinte, sob H2
+function marker(x, y, color, hollow) {
+  return el('circle', {
+    cx: x.toFixed(2), cy: y.toFixed(2), r: 2.8,
+    fill: hollow ? 'none' : color, stroke: hollow ? color : 'var(--well)', 'stroke-width': hollow ? 1.3 : 0.8,
+  });
 }
 
-// Séries de marcadores do regime ativo: [{ mode, hollow, pts: [{n, ops}] }]
-function activeSeries() {
-  const data = violateToggle?.checked ? measuredBad : measuredOk;
-  if (!data) return [];
+function seriesList() {
+  if (!measured) return [];
   return [
-    { mode: 'brute', pts: data.brute },
-    { mode: 'grid', pts: data.grid },
-    { mode: 'octree', pts: data.octree },
-    { mode: 'sap', pts: data.sap },
-    { mode: 'sap', hollow: true, pts: data.sapH2 ?? [] },
+    { mode: 'brute', pts: measured.brute },
+    { mode: 'grid', pts: measured.grid },
+    { mode: 'octree', pts: measured.octree },
+    { mode: 'sap', pts: measured.sap },
+    { mode: 'sap', hollow: true, pts: measured.sapH2 },
   ];
 }
 
 function drawMain() {
-  const { ctx, w, h } = setupCanvas(chartCanvas);
-  const ml = 40, mr = 6, mt = 8, mb = 22;
+  const f = frame(270);
   const yLo = 1, yHi = 14;   // 10¹ a 10¹⁴ operações
-  const X = n => ml + ((lx(n) - lx(N_MIN)) / (lx(N_MAX) - lx(N_MIN))) * (w - ml - mr);
-  const Y = v => mt + (1 - (Math.log10(Math.max(v, 1e-9)) - yLo) / (yHi - yLo)) * (h - mt - mb);
-
-  // grade e marcas: x em toda potência de 10, y a cada duas
-  ctx.fillStyle = INK;
-  ctx.strokeStyle = 'rgba(255,255,255,0.07)';
-  ctx.lineWidth = 1;
-  for (let e = 1; e <= 7; e++) {
-    ctx.beginPath(); ctx.moveTo(X(10 ** e), mt); ctx.lineTo(X(10 ** e), h - mb); ctx.stroke();
-    ctx.textAlign = 'center';
-    ctx.fillText(pow10Label(e), X(10 ** e), h - mb + 11);
-  }
+  const Y = v => f.y0 + (1 - (lx(Math.max(v, 1e-9)) - yLo) / (yHi - yLo)) * (f.y1 - f.y0);
+  mainSvg.replaceChildren();
+  const axes = el('g');
+  xAxis(axes, f);
   for (let e = yLo; e <= yHi; e++) {
-    ctx.beginPath(); ctx.moveTo(ml, Y(10 ** e)); ctx.lineTo(w - mr, Y(10 ** e)); ctx.stroke();
-    if (e % 2 === 0) { ctx.textAlign = 'right'; ctx.fillText(pow10Label(e), ml - 4, Y(10 ** e) + 3); }
+    axes.append(el('line', { x1: f.x0, x2: f.x1, y1: Y(10 ** e), y2: Y(10 ** e), class: 'ac-grid' }));
+    axes.append(el('text', { x: f.x0 - 3, y: Y(10 ** e) + 3, 'text-anchor': 'end', class: 'ac-tick' }, pow10Label(e)));
   }
-  ctx.textAlign = 'center';
-  ctx.fillText('N cubos', ml + (w - ml - mr) / 2, h - 2);
-  ctx.save();
-  ctx.translate(7, mt + (h - mt - mb) / 2);
-  ctx.rotate(-Math.PI / 2);
-  ctx.fillText('operações', 0, 0);
-  ctx.restore();
+  yLabel(axes, f, 'Operações (testes de par + inserções)');
+  mainSvg.append(axes);
 
-  ctx.save();
-  ctx.beginPath();
-  ctx.rect(ml, mt, w - ml - mr, h - mt - mb);
-  ctx.clip();
-
+  const plot = clipArea(mainSvg, f, 'acMainClip');
   // N atual da cena
-  const N = Math.max(state.cubes.length, 2);
-  ctx.strokeStyle = 'rgba(255,255,255,0.3)';
-  ctx.setLineDash([2, 3]);
-  ctx.beginPath(); ctx.moveTo(X(N), mt); ctx.lineTo(X(N), h - mb); ctx.stroke();
-  ctx.setLineDash([]);
+  const N = state.cubes.length;
+  if (N >= N_MIN) plot.append(el('line', { x1: f.X(N), x2: f.X(N), y1: f.y0, y2: f.y1, class: 'ac-now' }));
 
-  // triângulos de inclinação 1 e 2 (uma década na horizontal)
+  // triângulos de inclinação 1 e 2 no canto inferior direito (uma década na horizontal)
   const slope = (n0, v0, k) => {
-    const x0 = X(n0), x1 = X(n0 * 10), y0 = Y(v0), y1 = Y(v0 * 10 ** k);
-    ctx.strokeStyle = 'rgba(255,255,255,0.45)';
-    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y0); ctx.lineTo(x1, y1); ctx.closePath(); ctx.stroke();
-    ctx.fillStyle = INK;
-    ctx.textAlign = 'left';
-    ctx.fillText(String(k), x1 + 3, (y0 + y1) / 2 + 3);
+    const xa = f.X(n0), xb = f.X(n0 * 10), ya = Y(v0), yb = Y(v0 * 10 ** k);
+    plot.append(el('path', { d: `M${xa},${ya} L${xb},${ya} L${xb},${yb} Z`, class: 'ac-slope' }));
+    plot.append(el('text', { x: xb - 3, y: (ya + yb) / 2 + 3, 'text-anchor': 'end', class: 'ac-tick' }, String(k)));
   };
-  slope(10 ** 4.3, 10 ** 1.4, 1);
-  slope(10 ** 5.6, 10 ** 1.4, 2);
+  slope(10 ** 4.7, 10 ** 1.5, 1);
+  slope(10 ** 5.95, 10 ** 1.5, 2);
 
-  for (const t of THEORY) strokeCurve(ctx, t.f, X, v => Y(v), t);
-  for (const s of activeSeries()) {
-    for (const p of s.pts) marker(ctx, X(p.n), Y(p.ops), COLOR[s.mode], s.hollow);
-  }
-  // cruzamentos numerados
+  for (const t of THEORY) plot.append(curvePath(f, Y, t));
+  for (const s of seriesList()) for (const p of s.pts) plot.append(marker(f.X(p.n), Y(p.ops), COLOR[s.mode], s.hollow));
   CROSSINGS.forEach((c, i) => {
-    const x = X(c.n), y = Y(c.y);
-    ctx.fillStyle = '#e4e4e7';
-    ctx.beginPath(); ctx.arc(x, y, 2.2, 0, Math.PI * 2); ctx.fill();
-    ctx.textAlign = 'left';
-    ctx.fillText(String(i + 1), x + 3, y - 3);
+    plot.append(el('circle', { cx: f.X(c.n), cy: Y(c.y), r: 2.4, class: 'ac-cross' }));
+    plot.append(el('text', { x: f.X(c.n) + 3, y: Y(c.y) - 3, class: 'ac-cross-label' }, String(i + 1)));
   });
-  ctx.restore();
+  mainSvg.append(plot);
 }
 
 function drawRatio() {
-  if (!ratioCanvas) return;
-  const { ctx, w, h } = setupCanvas(ratioCanvas);
-  const ml = 40, mr = 6, mt = 8, mb = 22;
-  const X = n => ml + ((lx(n) - lx(N_MIN)) / (lx(N_MAX) - lx(N_MIN))) * (w - ml - mr);
-  const Y = r => mt + (1 - Math.min(r, RATIO_MAX * 1.2) / RATIO_MAX) * (h - mt - mb);
-
-  ctx.fillStyle = INK;
-  ctx.strokeStyle = 'rgba(255,255,255,0.07)';
-  ctx.lineWidth = 1;
-  for (let e = 1; e <= 7; e++) {
-    ctx.beginPath(); ctx.moveTo(X(10 ** e), mt); ctx.lineTo(X(10 ** e), h - mb); ctx.stroke();
-    ctx.textAlign = 'center';
-    ctx.fillText(pow10Label(e), X(10 ** e), h - mb + 11);
-  }
+  const f = frame(180);
+  const Y = r => f.y0 + (1 - r / RATIO_MAX) * (f.y1 - f.y0);
+  ratioSvg.replaceChildren();
+  const axes = el('g');
+  xAxis(axes, f);
   for (let r = 0; r <= RATIO_MAX; r += 20) {
-    ctx.beginPath(); ctx.moveTo(ml, Y(r)); ctx.lineTo(w - mr, Y(r)); ctx.stroke();
-    ctx.textAlign = 'right';
-    ctx.fillText(String(r), ml - 4, Y(r) + 3);
+    axes.append(el('line', { x1: f.x0, x2: f.x1, y1: Y(r), y2: Y(r), class: 'ac-grid' }));
+    axes.append(el('text', { x: f.x0 - 3, y: Y(r) + 3, 'text-anchor': 'end', class: 'ac-tick' }, String(r)));
   }
-  ctx.textAlign = 'center';
-  ctx.fillText('N cubos', ml + (w - ml - mr) / 2, h - 2);
-  ctx.save();
-  ctx.translate(7, mt + (h - mt - mb) / 2);
-  ctx.rotate(-Math.PI / 2);
-  ctx.fillText('T(n)/n', 0, 0);
-  ctx.restore();
+  yLabel(axes, f, 'T(n)/n');
+  ratioSvg.append(axes);
 
-  ctx.save();
-  ctx.beginPath();
-  ctx.rect(ml, mt, w - ml - mr, h - mt - mb);
-  ctx.clip();
-  for (const t of THEORY) strokeCurve(ctx, t.f, X, (v, n) => Y(v / n), t);
-  for (const s of activeSeries()) {
+  const plot = clipArea(ratioSvg, f, 'acRatioClip');
+  for (const t of THEORY) plot.append(curvePath(f, Y, t, (v, n) => Math.min(v / n, RATIO_MAX * 1.05)));
+  ratioSvg.append(plot);
+
+  // Seta para cima onde uma curva ou um ponto sai pelo topo
+  const arrow = (x, color) => ratioSvg.append(el('path', {
+    d: `M${x},${f.y0 - 5} l-3.5,6 h7 Z`, fill: color,
+  }));
+  const bruteTop = THEORY.find(t => t.id === 'brute');
+  let lo = N_MIN, hi = N_MAX;   // bisseção: (n−1)/2 = RATIO_MAX
+  for (let it = 0; it < 60; it++) {
+    const mid = Math.sqrt(lo * hi);
+    if (bruteTop.f(mid) / mid < RATIO_MAX) lo = mid; else hi = mid;
+  }
+  arrow(f.X(lo), COLOR.brute);
+  ratioSvg.append(el('text', { x: f.X(lo) + 6, y: f.y0 + 9, class: 'ac-tick' }, 'n² sai pelo topo'));
+
+  for (const s of seriesList()) {
     for (const p of s.pts) {
       const r = p.ops / p.n;
-      if (r > RATIO_MAX) {
-        // acima do topo: seta para cima na borda
-        const x = X(p.n);
-        ctx.fillStyle = COLOR[s.mode];
-        ctx.beginPath(); ctx.moveTo(x, mt + 1); ctx.lineTo(x - 3, mt + 6); ctx.lineTo(x + 3, mt + 6); ctx.fill();
-      } else {
-        marker(ctx, X(p.n), Y(r), COLOR[s.mode], s.hollow);
-      }
+      if (r > RATIO_MAX) arrow(f.X(p.n), COLOR[s.mode]);
+      else ratioSvg.append(marker(f.X(p.n), Y(r), COLOR[s.mode], s.hollow));
     }
   }
-  ctx.restore();
 }
 
 function fmtN(n) {
   if (n < 1000) return n.toFixed(n < 100 ? 1 : 0).replace('.', ',');
-  const e = Math.floor(Math.log10(n));
-  return `${(n / 10 ** e).toFixed(1).replace('.', ',')}·${pow10Label(e)}`;
+  const e = Math.floor(lx(n));
+  return `${(n / 10 ** e).toFixed(2).replace('.', ',')}·${pow10Label(e)}`;
 }
 
 function renderCrossings() {
-  if (!crossingsList) return;
-  crossingsList.replaceChildren(...CROSSINGS.map(c => {
-    const li = document.createElement('li');
-    li.textContent = `${NAME[c.a]} × ${NAME[c.b]}: n ≈ ${fmtN(c.n)}`;
-    return li;
+  if (!crossingsBody) return;
+  crossingsBody.replaceChildren(...CROSSINGS.map((c, i) => {
+    const tr = document.createElement('tr');
+    for (const text of [String(i + 1), `${NAME[c.a]} × ${NAME[c.b]}`, fmtN(c.n)]) {
+      const td = document.createElement('td');
+      td.textContent = text;
+      tr.append(td);
+    }
+    return tr;
   }));
 }
 
 function measure() {
-  if (measuring || measuredOk) return;
+  if (measuring || measured) return;
   measuring = true;
   const worker = new Worker(new URL('./bench-worker.js', import.meta.url), { type: 'module' });
   worker.onmessage = ({ data }) => {
     if (data.type === 'asymptotic-progress') {
-      if (chartNote) chartNote.textContent = `Medindo ${data.violate ? 'os contraexemplos' : 'as cenas'}: n = ${data.n.toLocaleString('pt-BR')}…`;
+      if (chartNote) chartNote.textContent = `Contando operações: n = ${data.n.toLocaleString('pt-BR')}…`;
     } else if (data.type === 'asymptotic-done') {
-      measuredOk = data.ok;
-      measuredBad = data.violate;
-      updateNote();
-      dirty = true;
+      measured = data.ok;
+      if (chartKeyMeasured) chartKeyMeasured.hidden = false;
+      if (chartNote) chartNote.textContent = 'Contagens em cenas que respeitam as hipóteses de cada teorema, de n = 10 a 10⁵ (força bruta até 10⁴).';
+      lastN = -1;
       worker.terminate();
     }
   };
   worker.onerror = e => {
+    measuring = false;
     if (chartNote) chartNote.textContent = 'As medições falharam; veja o console.';
     console.error(e.message);
   };
   worker.postMessage({ type: 'asymptotic' });
 }
 
-function updateNote() {
-  if (!chartNote || !measuredOk) return;
-  chartNote.textContent = violateToggle?.checked
-    ? 'Contraexemplos: todos numa célula (grade), agrupados num ponto com D = 6 (octree), todos com o mesmo x (SAP). As medições sobem para a curva n(n−1)/2.'
-    : 'Cenas que respeitam as hipóteses de cada teorema, de n = 10 a 10⁵ (força bruta até 10⁴). O círculo vazado é o Sweep and Prune no frame seguinte, sob H2.';
-}
-
-violateToggle?.addEventListener('change', () => { updateNote(); dirty = true; });
 renderCrossings();
 
 export function drawChart() {
-  if (!chartCanvas || chartPanelEl?.classList.contains('chart-hidden')) return;
+  if (!mainSvg || chartPanelEl?.classList.contains('chart-hidden')) return;
   measure();
   const N = state.cubes.length;
-  if (!dirty && N === lastN) return;
-  dirty = false;
+  if (N === lastN) return;
   lastN = N;
   drawMain();
   drawRatio();

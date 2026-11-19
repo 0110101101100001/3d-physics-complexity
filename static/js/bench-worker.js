@@ -13,8 +13,7 @@
 //   { type: 'growth-progress', regime, n, index, total } e { type: 'growth-done', results }
 //
 // Ou { type: 'asymptotic' }: as contagens de operações do gráfico assintótico
-// (asymptotic.js), com e sem as hipóteses. Envia { type: 'asymptotic-progress', ... } e
-// { type: 'asymptotic-done', ok, violate }
+// (asymptotic.js). Envia { type: 'asymptotic-progress', ... } e { type: 'asymptotic-done', ok }
 //
 // Ou { type: 'theorems' }: os cenários de cada teorema (theorem-checks.js), com e sem as
 // hipóteses. Envia { type: 'theorems-progress', theorem, index, total } e
@@ -68,9 +67,7 @@ function curveFit(params) {
 self.onmessage = ({ data }) => {
   if (data.type === 'asymptotic') {
     const onProgress = p => postMessage({ type: 'asymptotic-progress', ...p });
-    const ok = measureAsymptotic({ onProgress });
-    const violate = measureAsymptotic({ violate: true, onProgress });
-    postMessage({ type: 'asymptotic-done', ok, violate });
+    postMessage({ type: 'asymptotic-done', ok: measureAsymptotic({ onProgress }) });
     return;
   }
   if (data.type === 'theorems') {
