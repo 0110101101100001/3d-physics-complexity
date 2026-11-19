@@ -19,13 +19,14 @@ A broad-phase escolhe quais pares de cubos vale a pena testar. O teste em si é 
 | Octree | O(n log n) | Divide o espaço em 8 octantes, recursivamente. Um cubo que cruza um plano divisor fica no nó pai. A raiz é um cubo de lado 40 apoiado no chão da arena. |
 | Sweep and Prune | O(n + k) | Mantém os cubos ordenados pelo início no eixo X e só testa os que se sobrepõem nesse eixo (k pares). A lista sobrevive entre frames, então a ordenação por inserção quase não troca nada. |
 
-Cada resultado vale sob uma hipótese, e a janela **Prova de complexidade** do simulador (menu ⋯) demonstra todos eles:
+A janela **Prova de complexidade** do simulador (menu ⋯) traz um teorema por estratégia, com a prova:
 
-- Grade: O(n) se nenhuma célula tem mais que K cubos. Com densidade constante, o custo esperado é Θ(n).
-- Octree: O(n log n) se cada nó guarda no máximo K objetos e a profundidade é O(log n). Para pontos uniformes, a profundidade é O(log n) com alta probabilidade.
-- Sweep and Prune: O(n + k) com coerência temporal. Vira O(n) se cada cubo se sobrepõe em X a no máximo K outros.
+- Força bruta: Θ(n²) exato, sem hipóteses.
+- Grade: O(n) esperado, se nenhuma célula tem mais que K cubos. Todos numa célula: Θ(n²).
+- Octree: O(n log n) com divisão balanceada, pelo Teorema Mestre (T(n) = 8T(n/8) + Θ(n), caso 2). Sem balanceamento, pode chegar a Θ(n²).
+- Sweep and Prune: O(n + k) por frame, com k = pares sobrepostos no eixo X (k ≥ colisões): a lista fica guardada entre frames e a ordenação por inserção custa O(n) com coerência temporal. Só o primeiro frame, que ordena do zero, custa O(n log n + k).
 
-A mesma janela mostra quando as hipóteses falham. Com cubos de tamanho fixo, os que cruzam planos divisores ficam presos no topo da Octree e os pares passam a crescer como Ω(n^(4/3)). Em 3D, o k do Sweep and Prune cresce como n^(5/3). Na arena fixa do simulador, a densidade sobe com n e as quatro estratégias são Θ(n²): o que decide quem vence até 150 cubos é a constante. A aba Verificação confere isso na cena atual e mede os expoentes num experimento com n de 100 a 1600.
+A aba Verificação roda, para cada estratégia, uma cena que respeita as hipóteses e outra que as viola, e compara a contagem medida com a fórmula da prova. Na arena fixa do simulador a densidade sobe com n e as quatro estratégias são Θ(n²): o que decide quem vence até 150 cubos é a constante.
 
 ## O que dá para fazer no simulador
 

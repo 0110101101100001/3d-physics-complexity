@@ -698,6 +698,35 @@ details.proof-thm--cor[open] > summary { margin-bottom: 4px; }
 .proof-status { font-family: var(--font-mono); font-size: 12px; color: var(--ink-soft); }
 .proof .katex { font-size: 1.05em; }
 .proof .katex-display { margin: 12px 0; overflow-x: auto; overflow-y: hidden; padding: 4px 0; }
+.proof-panel sub { font-size: 0.72em; }
+
+/* Verificação: um bloco por teorema, com gráfico log-log e legenda */
+.proof-checks { display: grid; gap: 16px; }
+.proof-checks:empty { display: none; }
+.proof-check { --key: var(--mode); padding: 14px 16px; background: var(--well); border: 1px solid var(--line); border-left: 3px solid var(--key); border-radius: var(--r-s); }
+.proof-check[data-mode="brute"] { --key: var(--brute); }
+.proof-check[data-mode="grid"] { --key: var(--grid); }
+.proof-check[data-mode="octree"] { --key: var(--octree); }
+.proof-check[data-mode="sap"] { --key: var(--sap); }
+.proof-check > * + * { margin-top: 10px; }
+.proof-check__title { font-family: var(--font-mono); font-size: 13px; color: var(--ink); max-width: none; }
+.proof-chart { display: block; width: 100%; max-width: 640px; height: auto; }
+.proof-chart__grid { stroke: var(--line); stroke-width: 1; }
+.proof-chart__tick { fill: var(--ink-soft); font-family: var(--font-mono); font-size: 11px; }
+.proof-chart__theory { fill: none; stroke-width: 1.5; stroke-dasharray: 5 4; }
+.proof-chart__dot { stroke: var(--well); stroke-width: 1.5; }
+.proof-chart__ok.proof-chart__theory { stroke: var(--key); }
+.proof-chart__ok.proof-chart__dot { fill: var(--key); }
+.proof-chart__bad.proof-chart__theory { stroke: var(--danger); }
+.proof-chart__bad.proof-chart__dot { fill: var(--danger); }
+.proof-check__legend { list-style: none; padding: 0; display: grid; gap: 6px; font-size: 13px; max-width: none; }
+.proof-check__legend li { position: relative; padding-left: 18px; }
+.proof-check__legend li::before { content: ""; position: absolute; left: 0; top: 0.5em; width: 9px; height: 9px; border-radius: 50%; }
+.proof-check__ok::before { background: var(--key); }
+.proof-check__bad::before { background: var(--danger); }
+.proof-check__numbers > summary { cursor: pointer; font-family: var(--font-mono); font-size: 12px; color: var(--ink-soft); }
+.proof-check__numbers > summary:hover { color: var(--ink); }
+.proof-check__numbers[open] > summary { margin-bottom: 8px; }
 @media (max-width: 720px) {
   .proof { height: calc(100vh - 24px); }
   .proof-panel { padding: 16px; font-size: 14px; }

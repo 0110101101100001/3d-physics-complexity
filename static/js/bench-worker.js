@@ -11,11 +11,16 @@
 // Ou { type: 'growth', cellSize, octreeDepth }: o experimento de crescimento da aba
 // "Prova de complexidade" (pares contados nos dois regimes de densidade). Envia
 //   { type: 'growth-progress', regime, n, index, total } e { type: 'growth-done', results }
+//
+// Ou { type: 'theorems' }: os cenários de cada teorema (theorem-checks.js), com e sem as
+// hipóteses. Envia { type: 'theorems-progress', theorem, index, total } e
+// { type: 'theorems-done', results }
 
 import {
   MODES, createStructures, plainCube, createSyntheticCubes, mulberry32,
   measureTotal, measurePhases, fitPowerLaw, growthExperiment,
 } from './broadphase.js';
+import { theoremExperiment } from './theorem-checks.js';
 
 // Ajuste empírico: mede cada estratégia em cenas sintéticas de vários N e ajusta
 // t = a·n^k por mínimos quadrados em escala log-log.
@@ -56,6 +61,11 @@ function curveFit(params) {
 }
 
 self.onmessage = ({ data }) => {
+  if (data.type === 'theorems') {
+    const results = theoremExperiment({ onProgress: p => postMessage({ type: 'theorems-progress', ...p }) });
+    postMessage({ type: 'theorems-done', results });
+    return;
+  }
   const params = { cellSize: data.cellSize, octreeDepth: data.octreeDepth };
   if (data.type === 'growth') {
     const onProgress = p => postMessage({ type: 'growth-progress', ...p });

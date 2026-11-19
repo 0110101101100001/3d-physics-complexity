@@ -364,7 +364,7 @@
       <header class="modal-header">
         <div>
           <h2 id="proofTitle">Prova de complexidade</h2>
-          <p class="modal-lead">Correção e custo de cada estratégia, com as hipóteses de cada resultado e a verificação na própria simulação.</p>
+          <p class="modal-lead">Um teorema por estratégia, com a prova e a verificação na própria simulação.</p>
         </div>
         <button type="button" id="closeProofBtn" class="icon-btn" aria-label="Fechar a prova de complexidade">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
@@ -384,179 +384,112 @@
       <div class="proof-body">
         <!-- ===================== RESUMO ===================== -->
         <section class="proof-panel" role="tabpanel" id="proof-resumo" aria-labelledby="proofTab-resumo">
-          <p>Seja \(n\) o número de cubos, \(M(n)\) o custo de montar a estrutura e \(C(n)\) o número de <strong>pares candidatos</strong>, os pares que a estratégia entrega ao teste AABB. Cada aba demonstra o resultado clássico da estratégia como um teorema, com a hipótese de que ele depende, e depois mostra o que acontece quando a hipótese não vale.</p>
+          <p>Seja \(n\) o número de cubos. O custo de um frame é \(T(n) = M(n) + Q(n)\): \(M\) é a <strong>montagem</strong> da estrutura e \(Q\) a <strong>consulta</strong>, que percorre a estrutura e entrega ao teste AABB os \(C(n) \le Q(n)\) <strong>pares candidatos</strong>. Cada aba prova um teorema; as hipóteses estão no Modelo de custo.</p>
           <div class="table-scroll">
             <table class="data-table proof-table">
               <thead>
-                <tr><th>Estratégia</th><th>Resultado clássico</th><th>Hipótese do teorema</th><th>Pior caso</th></tr>
+                <tr><th>Algoritmo</th><th>Custo</th><th>Tipo</th><th>Hipóteses</th><th>Método de prova</th></tr>
               </thead>
               <tbody>
-                <tr data-mode="brute"><td><span class="proof-key">Força bruta</span></td><td>\(\Theta(n^2)\) <span class="proof-ref">Teorema 1</span></td><td>nenhuma: vale para toda cena</td><td>\(\Theta(n^2)\)</td></tr>
-                <tr data-mode="grid"><td><span class="proof-key">Grade espacial</span></td><td>\(O(n)\) <span class="proof-ref">Teorema 2</span></td><td>cada célula com no máximo \(K\) cubos</td><td>\(\Theta(n^2)\)</td></tr>
-                <tr data-mode="octree"><td><span class="proof-key">Octree</span></td><td>\(O(n \log n)\) <span class="proof-ref">Teorema 3</span></td><td>cada nó com no máximo \(K\) objetos e profundidade \(O(\log n)\)</td><td>\(\Theta(n^2)\)</td></tr>
-                <tr data-mode="sap"><td><span class="proof-key">Sweep and Prune</span></td><td>\(O(n + k)\) <span class="proof-ref">Teorema 4</span></td><td>coerência temporal (\(2\delta \lt s_{\min}\)); \(O(n)\) se \(k = O(n)\)</td><td>\(\Theta(n^2)\)</td></tr>
+                <tr data-mode="brute"><td><span class="proof-key">Força bruta</span> <span class="proof-ref">Teorema 1</span></td><td>\(\Theta(n^2)\)</td><td>exato (todos os casos)</td><td>nenhuma</td><td>contagem direta</td></tr>
+                <tr data-mode="grid"><td><span class="proof-key">Grade espacial</span> <span class="proof-ref">Teorema 2</span></td><td>\(O(n)\)</td><td>esperado</td><td>H1, H<sub>U</sub>, H<sub>K</sub></td><td>soma sobre as células</td></tr>
+                <tr data-mode="octree"><td><span class="proof-key">Octree</span> <span class="proof-ref">Teorema 3</span></td><td>\(O(n \log n)\)</td><td>pior caso</td><td>H<sub>K</sub>, H<sub>B</sub></td><td>Teorema Mestre</td></tr>
+                <tr data-mode="sap"><td><span class="proof-key">Sweep and Prune</span> <span class="proof-ref">Teorema 4</span></td><td>\(O(n + k)\) por frame</td><td>pior caso</td><td>H2</td><td>contagem de inversões e da varredura</td></tr>
               </tbody>
             </table>
           </div>
-          <p>Os teoremas 2 a 4 são limites de pior caso <em>condicionados à hipótese</em>. Os corolários de cada aba mostram quando a hipótese vale em média: com densidade constante, a grade tem custo esperado \(\Theta(n)\); com objetos pontuais uniformes, a Octree tem custo esperado \(O(n \log n)\).</p>
-          <div class="proof-callout">
-            <p><strong>Limites das hipóteses no simulador.</strong> A cena tem cubos de tamanho fixo numa arena fixa. Com densidade constante e cubos de tamanho fixo, os cubos que cruzam planos divisores quebram a hipótese da Octree (os pares viram \(\Omega(n^{4/3})\)) e o \(k\) do Sweep and Prune cresce como \(n^{5/3}\). Na arena fixa a densidade cresce com \(n\), então nenhuma ocupação fica limitada e as quatro estratégias são \(\Theta(n^2)\): o que muda é a constante, e é ela que decide quem vence até \(n = 150\).</p>
-          </div>
-          <p>As provas de correção de cada aba garantem que as quatro estratégias acham exatamente as mesmas colisões. A aba <strong>Verificação</strong> confere isso na cena atual e mede os expoentes de \(C(n)\).</p>
+          <p>Sem as hipóteses, as outras três estratégias podem cair para \(\Theta(n^2)\), o custo da força bruta. É o que acontece na arena fixa do simulador: com mais cubos no mesmo espaço, as células e os nós enchem, e quem vence até \(n = 150\) é decidido pela constante.</p>
         </section>
 
         <!-- ===================== MODELO ===================== -->
         <section class="proof-panel" role="tabpanel" id="proof-modelo" aria-labelledby="proofTab-modelo" hidden>
-          <h3>Operação básica e medida de custo</h3>
-          <p>A operação básica é o teste AABB de um par, que compara as projeções nos três eixos em tempo constante: dois cubos de centros \(p_a, p_b\) e lados \(s_a, s_b\) se sobrepõem se e somente se</p>
+          <h3>Operação básica</h3>
+          <p>A operação básica é o teste AABB de um par, em tempo constante: dois cubos de centros \(p_a, p_b\) e lados \(s_a, s_b\) se sobrepõem se e somente se</p>
           \[ |p_a^x - p_b^x| \lt \tfrac{s_a + s_b}{2} \;\wedge\; |p_a^y - p_b^y| \lt \tfrac{s_a + s_b}{2} \;\wedge\; |p_a^z - p_b^z| \lt \tfrac{s_a + s_b}{2}. \]
-          <p>O custo de um frame é \(T(n) = M(n) + Q(n)\), em que \(M\) é montar a estrutura e \(Q\) é percorrê-la entregando os pares candidatos. Em todas as estratégias \(Q(n) = \Theta(C(n))\) a menos de termos lineares, então a análise conta \(C(n)\). A contagem tem uma vantagem sobre o tempo: não depende da máquina, do compilador JIT nem do relógio do navegador.</p>
+          <p>A análise conta operações (inserções, comparações, pares testados) em vez de medir tempo, para não depender da máquina.</p>
 
           <h3>Hipóteses</h3>
           <ul class="proof-list">
-            <li><strong>H1 (tamanho limitado).</strong> Os lados dos cubos estão em \([s_{\min}, s_{\max}] = [2, 6]\), com média \(\bar s = 4\).</li>
-            <li><strong>H2 (posições uniformes).</strong> Os centros são independentes e uniformes numa caixa \(L \times \tfrac{L}{2} \times L\), como a arena (\(L = 40\)).</li>
-            <li><strong>H3a (arena fixa).</strong> \(L\) constante: a densidade \(\rho = n / V\) cresce com \(n\). É o simulador.</li>
-            <li><strong>H3b (densidade constante).</strong> \(V \propto n\), ou seja, \(L \propto n^{1/3}\). É o regime em que as complexidades de caso médio são enunciadas.</li>
+            <li><strong>H1 (tamanho limitado).</strong> Todo cubo tem lado \(s \le s_{\max}\), constante. No simulador, de 2 a 6.</li>
+            <li><strong>H<sub>U</sub> (hash uniforme).</strong> Inserir numa tabela hash custa \(O(1)\) <em>esperado</em>.</li>
+            <li><strong>H<sub>K</sub> (ocupação limitada).</strong> Nenhuma célula da grade e nenhum nó da Octree guarda mais que \(K\) cubos, com \(K\) constante.</li>
+            <li><strong>H<sub>B</sub> (divisão balanceada).</strong> Na Octree, se \(n\) cubos chegam a um nó, cada um dos 8 filhos recebe no máximo \(n/8\).</li>
+            <li><strong>H2 (coerência temporal).</strong> De um frame para o outro, o número \(I\) de pares de cubos que trocam de ordem em \(X\) (inversões) é \(O(n)\). Vale quando cada cubo anda pouco por frame.</li>
           </ul>
-
-          <h3>Lema (sobreposição de intervalos)</h3>
-          <p>Sejam dois intervalos de comprimentos \(a\) e \(b\) com início uniforme num segmento de comprimento \(L \gg a, b\). A probabilidade de se sobreporem é</p>
-          \[ P(\text{sobreposição}) = \frac{a + b}{L} + O\!\left(\frac{(a+b)^2}{L^2}\right). \]
-          <p><em>Prova.</em> Fixado o primeiro intervalo \([x, x+a]\), o segundo, \([y, y+b]\), o toca se e só se \(y \in (x - b,\, x + a)\), um trecho de comprimento \(a + b\); a correção vem das bordas do segmento.</p>
-          <p>Por H2 os três eixos são independentes, então dois cubos estão a menos de \(r\) em cada eixo com probabilidade \(\Theta(r^3 / V)\). Somando sobre os \(\binom{n}{2}\) pares:</p>
-          \[ \mathbb{E}[\#\text{pares a distância} \lt r \text{ por eixo}] = \Theta\!\left(\frac{n^2 r^3}{V}\right) = \Theta(\rho\, n\, r^3). \]
-          <p>Esse é o fato central: com densidade constante (H3b), pares próximos são \(\Theta(n)\); na arena fixa (H3a), \(\Theta(n^2)\).</p>
         </section>
 
         <!-- ===================== FORÇA BRUTA ===================== -->
         <section class="proof-panel" role="tabpanel" id="proof-brute" aria-labelledby="proofTab-brute" hidden>
-          <h3>Correção</h3>
-          <p>O laço duplo visita todo par \(\{i, j\}\) com \(i \lt j\) exatamente uma vez, então toda colisão é testada e nenhum par se repete.</p>
           <div class="proof-thm" data-mode="brute">
             <p class="proof-thm__title">Teorema 1 (força bruta, \(\Theta(n^2)\))</p>
-            <p>Para qualquer configuração, \(C(n) = \binom{n}{2} = \frac{n(n-1)}{2}\), logo \(C(n) = \Theta(n^2)\) no melhor, no médio e no pior caso, e \(M(n) = 0\).</p>
+            <p>Para quaisquer \(n\) cubos, \(C(n) = \binom{n}{2}\) e \(T(n) = \Theta(n^2)\).</p>
           </div>
-          <p><em>Prova.</em> Para cada \(i\) o laço interno roda \(n - 1 - i\) vezes:</p>
-          \[ C(n) = \sum_{i=0}^{n-1} (n - 1 - i) = \sum_{m=0}^{n-1} m = \frac{n(n-1)}{2}. \]
-          <p>Para \(n \ge 2\) vale \(n - 1 \ge \tfrac{n}{2}\), então \(\tfrac{n^2}{4} \le C(n) \le \tfrac{n^2}{2}\), que é a definição de \(\Theta(n^2)\) com constantes \(\tfrac14\) e \(\tfrac12\). Não há estrutura, então \(M(n) = 0\).</p>
-          <p>Com \(n = 150\): \(C = 11\,175\). A aba Verificação confere esse valor na cena atual.</p>
+          <p><em>Prova.</em> <strong>Montagem.</strong> Não há estrutura: \(M(n) = 0\).</p>
+          <p><strong>Consulta e candidatos.</strong> O laço duplo testa cada par \((i, j)\) com \(i \lt j\). Para cada \(i\), o laço interno roda \(n - 1 - i\) vezes:</p>
+          \[ Q(n) = C(n) = \sum_{i=0}^{n-1} (n - 1 - i) = \frac{n(n-1)}{2}. \]
+          <p><strong>Total.</strong> Para \(n \ge 2\), \(\tfrac{n^2}{4} \le T(n) \le \tfrac{n^2}{2}\), logo \(T(n) = \Theta(n^2)\). Como a contagem não depende da posição dos cubos, melhor, médio e pior caso coincidem.</p>
+          <p class="proof-note">Com \(n = 150\): \(C = 11\,175\).</p>
         </section>
 
         <!-- ===================== GRADE ===================== -->
         <section class="proof-panel" role="tabpanel" id="proof-grid" aria-labelledby="proofTab-grid" hidden>
-          <p>O espaço é dividido em células de lado \(c\). O cubo com AABB \([m, M]\) entra em toda célula de índices \(\lfloor m_x / c \rfloor \ldots \lfloor M_x / c \rfloor\) (e o mesmo em \(y\) e \(z\)). Seja \(k_c\) o número de cubos na célula \(c\).</p>
-
+          <p>O espaço é dividido em células de lado \(c\), guardadas numa tabela hash. Cada cubo entra em todas as células que toca. Seja \(k_c\) o número de cubos na célula \(c\).</p>
           <div class="proof-thm" data-mode="grid">
-            <p class="proof-thm__title">Teorema 2 (grade espacial, \(O(n)\))</p>
-            <p>Sob H1, se nenhuma célula contém mais que \(K\) cubos, com \(K\) constante, então</p>
-            \[ M(n) = O(n), \qquad C(n) \le Q(n) = O(n), \qquad T(n) = O(n). \]
+            <p class="proof-thm__title">Teorema 2 (grade espacial, \(O(n)\) esperado)</p>
+            <p>Sob H1, H<sub>U</sub> e H<sub>K</sub>, \(\mathbb{E}[T(n)] = O(n)\).</p>
           </div>
-          <p><em>Prova.</em> <strong>Montagem.</strong> Por H1, um cubo cobre no máximo \(\lceil s_{\max}/c \rceil + 1\) índices por eixo, logo no máximo \(m = (\lceil s_{\max}/c \rceil + 1)^3\) células (com \(c = 2\): \(m = 64\)). Inserir em uma célula custa \(O(1)\) esperado na tabela hash, então \(M(n) \le m\,n = O(n)\).</p>
-          <p><strong>Consulta.</strong> A consulta percorre todos os pares dentro de cada célula, \(Q(n) = \sum_c \binom{k_c}{2}\). Só as células ocupadas contribuem, e há no máximo \(m\,n\) delas (cada cubo ocupa até \(m\)). Com \(k_c \le K\):</p>
-          \[ Q(n) \;\le\; \sum_{c \text{ ocupada}} \binom{K}{2} \;\le\; m\,n \cdot \frac{K(K-1)}{2} \;=\; O(n). \]
-          <p>Cada par candidato é entregue uma vez (unicidade, abaixo), então \(C(n) \le Q(n)\). Somando, \(T(n) = M(n) + Q(n) = O(n)\).</p>
-
-          <details class="proof-thm proof-thm--cor" data-mode="grid">
-            <summary class="proof-thm__title">Corolário 2.1 (densidade constante)</summary>
-            <p>Sob H1, H2 e H3b, \(\mathbb{E}[Q(n)] = \Theta(n)\) e \(\mathbb{E}[T(n)] = \Theta(n)\).</p>
-            <p><em>Prova.</em> Dois cubos só partilham uma célula se seus centros distam menos de \(r = s_{\max} + c\) em cada eixo, e partilham no máximo \(m\) células. Cada par dentro de uma célula conta uma vez em \(Q\), então, pelo lema do Modelo,</p>
-            \[ \mathbb{E}[Q] \;\le\; m \binom{n}{2} \frac{(2r)^3}{V} = \Theta\!\left(\frac{n^2}{V}\right) = \Theta(\rho\, n). \]
-            <p>Com densidade \(\rho = n/V\) constante, \(\mathbb{E}[Q] = O(n)\). Como \(M(n) \ge n\) (todo cubo é inserido), \(\mathbb{E}[T] = \Theta(n)\).</p>
-          </details>
-
-          <h3>Correção</h3>
-          <p><strong>Completude.</strong> Se \(A\) e \(B\) se sobrepõem, as projeções em cada eixo se tocam, então as faixas de índices de célula se interceptam em cada eixo e os dois partilham ao menos uma célula: o par é enumerado.</p>
-          <p><strong>Unicidade.</strong> Um par pode partilhar várias células. Ele só é reportado na <em>célula dona</em></p>
-          \[ o(A, B) = \Big( \max\big(\lfloor A^{\min}_x / c \rfloor, \lfloor B^{\min}_x / c \rfloor\big),\; \ldots_y,\; \ldots_z \Big), \]
-          <p>o canto mínimo da interseção das duas faixas. Essa célula é única e pertence às duas faixas, então o par sai exatamente uma vez, sem conjunto de pares já vistos.</p>
-
-          <h3>Limites da hipótese</h3>
-          <ul class="proof-list">
-            <li><strong>Arena fixa (H3a):</strong> a ocupação por célula cresce com \(n\), e pela mesma conta \(\mathbb{E}[Q] = \Theta(n^2/V) = \Theta(n^2)\), com constante pequena (no simulador, cerca de 4% dos pares da força bruta com 150 cubos).</li>
-            <li><strong>Pior caso:</strong> todos os cubos numa célula, \(k_c = n\) e \(Q = \binom{n}{2} = \Theta(n^2)\).</li>
-            <li><strong>Escolha de \(c\):</strong> \(c\) pequeno aumenta \(m\) (montagem cara, poucos pares por célula); \(c\) grande aumenta \(K\). É a troca que a barra de custo por fase mostra ao mexer no controle.</li>
-          </ul>
+          <p><em>Prova.</em> <strong>Montagem.</strong> Por H1, um cubo toca no máximo \(m = (\lceil s_{\max}/c \rceil + 1)^3\) células, e \(m\) é constante. São no máximo \(mn\) inserções, cada uma com custo \(O(1)\) esperado (H<sub>U</sub>):</p>
+          \[ \mathbb{E}[M(n)] \le m\,n \cdot O(1) = O(n). \]
+          <p><strong>Consulta.</strong> A consulta testa todos os pares dentro de cada célula. Como cada cubo ocupa até \(m\) células, há no máximo \(mn\) células ocupadas, e cada uma tem \(k_c \le K\) cubos (H<sub>K</sub>):</p>
+          \[ Q(n) = \sum_c \binom{k_c}{2} \;\le\; m\,n \cdot \frac{K(K-1)}{2} = O(n). \]
+          <p><strong>Candidatos.</strong> Um par que compartilha várias células só é reportado na de menor índice, então sai uma vez só e \(C(n) \le Q(n)\).</p>
+          <p><strong>Total.</strong> \(\mathbb{E}[T(n)] = \mathbb{E}[M(n)] + Q(n) = O(n)\).</p>
+          <p><strong>Sem H<sub>K</sub>:</strong> com todos os cubos numa célula, \(Q(n) = \binom{n}{2} = \Theta(n^2)\).</p>
         </section>
 
         <!-- ===================== OCTREE ===================== -->
         <section class="proof-panel" role="tabpanel" id="proof-octree" aria-labelledby="proofTab-octree" hidden>
-          <p>Cada nó divide sua região em 8 octantes. Um objeto desce para o filho que o contém por inteiro; se cruza um plano divisor (<em>straddling</em>), fica no nó atual. Uma folha com mais de \(K\) objetos se subdivide (no simulador \(K = 4\)), até a profundidade máxima \(D\).</p>
-
+          <p>Cada nó divide sua região em 8 octantes. Um cubo desce para o filho que o contém; se cruza um plano divisor, <strong>fica no próprio nó</strong>, sem ser duplicado. Assim, os 8 filhos recebem juntos no máximo os \(n\) cubos do pai: \(\sum_{i=1}^{8} n_i \le n\). Um nó com no máximo \(K\) cubos não se divide (é folha).</p>
           <div class="proof-thm" data-mode="octree">
             <p class="proof-thm__title">Teorema 3 (Octree, \(O(n \log n)\))</p>
-            <p>Se cada nó guarda no máximo \(K\) objetos e a árvore tem profundidade \(D\), então</p>
-            \[ M(n) = O(nD), \qquad C(n) \le K(D+1)\,n, \qquad T(n) = O(nD). \]
-            <p>Em particular, se \(D = O(\log n)\), então \(T(n) = O(n \log n)\).</p>
+            <p>Sob H<sub>K</sub> e H<sub>B</sub>, \(T(n) = O(n \log n)\).</p>
           </div>
-          <p><em>Prova.</em> <strong>Montagem.</strong> Uma inserção desce no máximo \(D\) níveis com \(O(1)\) por nível (testar o centro e escolher o filho), então \(M(n) = O(nD)\). Subdividir uma folha redistribui seus \(K+1\) objetos, cada um um nível abaixo; isso também cabe em \(O(D)\) por objeto.</p>
-          <p><strong>Pares.</strong> Atribua cada par testado ao objeto do nó mais profundo dos dois, digamos \(b\), guardado no nó \(v\). Pela forma da consulta, o parceiro \(a\) está em \(v\) ou é herdado de um ancestral de \(v\) (os herdados só vêm de ancestrais). O nó \(v\) tem no máximo \(K\) objetos, e há no máximo \(D\) ancestrais com no máximo \(K\) cada. Então \(b\) tem no máximo \(K(D+1)\) parceiros, e somando sobre os \(n\) objetos:</p>
-          \[ C(n) \;\le\; K(D+1)\, n. \]
-          <p><strong>Travessia.</strong> Cada nó interno nasceu de uma folha com mais de \(K\) objetos; os nós internos de uma mesma profundidade são disjuntos, então há no máximo \(n/K\) por nível e \(O(nD/K)\) no total, com 8 filhos cada. Visitar os nós custa \(O(nD)\). Somando, \(T(n) = O(nD) + O(K D n) = O(nD)\).</p>
-
-          <details class="proof-thm proof-thm--cor" data-mode="octree">
-            <summary class="proof-thm__title">Corolário 3.1 (objetos pontuais uniformes)</summary>
-            <p>Para \(n\) pontos independentes e uniformes na raiz, a profundidade satisfaz \(D \le \tfrac{K+1}{K}\log_8 n + t\) com probabilidade ao menos \(1 - 8^{-tK}\). Logo \(D = O(\log n)\) com alta probabilidade e \(T(n) = O(n \log n)\).</p>
-            <p><em>Prova.</em> Pontos não cruzam planos, então a hipótese de ocupação do Teorema 3 vale por construção: só folhas guardam objetos, com no máximo \(K\) cada. Um nó de profundidade \(d\) cobre uma fração \(8^{-d}\) da raiz, então contém cada ponto com probabilidade \(8^{-d}\). A árvore chega à profundidade \(d+1\) só se algum nó de profundidade \(d\) tem mais de \(K\) pontos. Pela cota da união sobre os \(8^d\) nós e sobre os conjuntos de \(K+1\) pontos:</p>
-            \[ P(D \gt d) \;\le\; 8^d \binom{n}{K+1} 8^{-d(K+1)} \;\le\; 8^d \left(n\, 8^{-d}\right)^{K+1} = n^{K+1}\, 8^{-dK}. \]
-            <p>Com \(d = \tfrac{K+1}{K}\log_8 n + t\), o lado direito vale \(8^{-tK}\). Aplicando o Teorema 3, \(T(n) = O(n \log n)\) com alta probabilidade.</p>
-          </details>
-          <p>No simulador a profundidade máxima é escolhida no controle (1 a 10). Com \(D\) fixo e ocupação limitada, o Teorema 3 dá \(O(n)\); mas, com \(D\) fixo, a ocupação das folhas cresce com \(n\), e a hipótese só se mantém se \(D\) acompanhar \(\log_8 n\).</p>
-
-          <h3>Correção</h3>
-          <p><strong>Invariante.</strong> Todo objeto está contido na região do nó onde fica.</p>
-          <p><strong>Completude.</strong> Sejam \(A\) e \(B\) sobrepostos, guardados nos nós \(u\) e \(v\). O teste AABB é estrito, então \(A \cap B\) tem interior não vazio, e os interiores de \(u\) e \(v\) se interceptam. Em uma octree, dois nós cujos interiores se interceptam são aninhados: \(u = v\), ou um é ancestral do outro. Se \(u = v\), o par é testado dentro do nó. Se \(u\) é ancestral de \(v\), todo nó no caminho de \(u\) até \(v\) contém \(v \supset B\), e \(A\) toca \(B\), logo \(A\) toca cada um deles e é repassado até \(v\), onde é testado contra \(B\).</p>
-          <p><strong>Unicidade.</strong> O par é testado só no nó do mais profundo dos dois.</p>
-
-          <h3>Limites da hipótese: cubos de tamanho fixo</h3>
-          <p>Com objetos de tamanho \(s \gt 0\), a ocupação dos nós de cima não fica limitada: quem cruza um plano divisor fica preso no nó.</p>
-          <p><strong>Proposição 3.2.</strong> Sob H1, H2 e H3b, \(\mathbb{E}[C(n)] = \Omega(n^{4/3})\).</p>
-          <p><em>Prova.</em> Um cubo de lado \(s\) cruza o plano central de um eixo com probabilidade \(s/L\) (lema do Modelo). Seja \(S\) o número de cubos presos na raiz por cruzarem um dos planos centrais em \(x\) ou \(z\) (na raiz do simulador o corte em \(y\) fica no teto da arena). Então \(S\) é binomial com \(p \approx 2\bar s / L\). Os \(S\) cubos da raiz são testados todos contra todos:</p>
-          \[ \mathbb{E}[C(n)] \;\ge\; \mathbb{E}\!\left[\binom{S}{2}\right] = \binom{n}{2} p^2 \approx \binom{n}{2}\left(\frac{2\bar s}{L}\right)^{2} = \Theta\!\left(\frac{n^2}{L^2}\right). \]
-          <p>Com densidade constante, \(L \propto n^{1/3}\), o que dá \(\Theta(n^{4/3})\); na arena fixa, \(\Theta(n^2)\).</p>
-          <p>Os níveis de baixo somam mais pares do mesmo tipo, e o experimento da aba Verificação mede um expoente perto de \(1{,}5\). <strong>Pior caso:</strong> todos os cubos cruzando o centro ficam na raiz, \(C = \binom{n}{2}\).</p>
-          <p class="proof-note">A solução clássica é a <em>octree solta</em> (loose octree), em que cada nó aceita objetos que passem até metade do seu lado além da borda: um objeto de lado \(s\) desce até nós de lado \(\ge s\), a ocupação volta a ficar limitada e o Teorema 3 se aplica.</p>
+          <p><em>Prova.</em> <strong>Montagem.</strong> Num nó com \(n\) cubos, classificar cada um num octante custa \(\Theta(n)\); depois, cada filho é montado da mesma forma. Por H<sub>B</sub>, \(n_i \le n/8\), e como \(M\) é crescente, trocar cada \(n_i\) por \(n/8\) só aumenta o custo:</p>
+          \[ M(n) \le 8\,M\!\left(\tfrac{n}{8}\right) + \Theta(n). \]
+          <p>No Teorema Mestre, \(a = 8\), \(b = 8\) e \(n^{\log_b a} = n^{\log_8 8} = n\). Como \(f(n) = \Theta(n)\) cresce no mesmo ritmo que \(n^{\log_b a}\), vale o <strong>caso 2</strong>:</p>
+          \[ M(n) = O\big(n^{\log_b a} \log n\big) = O(n \log n). \]
+          <p><strong>Consulta.</strong> Por H<sub>B</sub>, um nó de profundidade \(d\) tem no máximo \(n/8^d\) cubos, então a árvore tem altura \(h = O(\log n)\). Cada cubo é testado contra os outros cubos do seu nó e contra os dos ancestrais que o tocam, no máximo \(K\) por nível (H<sub>K</sub>):</p>
+          \[ C(n) \le Q(n) \le K\,h\,n = O(n \log n). \]
+          <p><strong>Total.</strong> \(T(n) = M(n) + Q(n) = O(n \log n)\).</p>
+          <p><strong>Sem H<sub>B</sub>:</strong> com o cubo \(i\) na posição \(2^{-i}\) da diagonal (em frações do lado da raiz), cada divisão separa um único cubo dos demais. A árvore fica com altura \(\approx n\) e \(M(n) = \Theta(n^2)\).</p>
         </section>
 
         <!-- ===================== SWEEP AND PRUNE ===================== -->
         <section class="proof-panel" role="tabpanel" id="proof-sap" aria-labelledby="proofTab-sap" hidden>
-          <p>A lista de objetos fica ordenada por \(x^{\min}\). A varredura compara cada objeto \(a\) com os seguintes enquanto \(b^{\min}_x \lt a^{\max}_x\) e para no primeiro que começa depois. Seja \(k\) o número de pares que se sobrepõem no eixo \(X\) e \(I\) o número de inversões entre a ordem do frame anterior e a atual.</p>
-
+          <p>Cada cubo vira um intervalo no eixo \(X\), e a lista de intervalos é ordenada pelo início. A lista é guardada de um frame para o outro e reordenada por inserção. Seja \(k\) o número de pares que se sobrepõem <em>em \(X\)</em>; como uma colisão exige sobreposição nos três eixos, \(k\) é pelo menos o número de colisões.</p>
           <div class="proof-thm" data-mode="sap">
-            <p class="proof-thm__title">Teorema 4 (Sweep and Prune, \(O(n + k)\))</p>
-            <p>Em todo frame, \(C(n) = k\) e \(T(n) = O(n + k + I)\). Se cada objeto anda no máximo \(\delta\) por frame em \(X\), com \(2\delta \lt s_{\min}\) (coerência temporal), então \(I \le k\) e</p>
-            \[ T(n) = O(n + k). \]
+            <p class="proof-thm__title">Teorema 4 (Sweep and Prune, \(O(n + k)\) por frame)</p>
+            <p>Sob H2, cada frame custa \(T(n) = O(n + k)\), com \(C(n) = k\).</p>
           </div>
-          <p><em>Prova.</em> <strong>Ordenação.</strong> A ordenação por inserção move cada elemento para trás uma posição por inversão, então custa \(n - 1 + I\).</p>
-          <p><strong>Varredura.</strong> Para cada \(a\), o laço interno roda uma vez para cada \(b\) seguinte com \(b^{\min}_x \lt a^{\max}_x\) e mais uma vez para parar. Como a lista está ordenada, \(a^{\min}_x \le b^{\min}_x\), e então \(b^{\min}_x \lt a^{\max}_x\) é exatamente a condição de sobreposição em \(X\). Cada par que se sobrepõe em \(X\) é visitado uma vez, a partir do anterior:</p>
-          \[ Q(n) = n + k, \qquad C(n) = k. \]
-          <p><strong>Coerência temporal.</strong> Dois objetos só trocam de ordem entre frames se seus inícios se cruzaram. Com deslocamento de no máximo \(\delta\) cada, os inícios estavam a menos de \(2\delta\) um do outro antes e depois da troca. Como \(2\delta \lt s_{\min}\) e todo intervalo tem comprimento \(\ge s_{\min}\), o que começa depois começa antes de o outro terminar: os dois se sobrepõem em \(X\). Logo cada inversão é um par contado em \(k\), \(I \le k\), e \(T(n) = (n - 1 + I) + (n + k) = O(n + k)\).</p>
-
-          <details class="proof-thm proof-thm--cor" data-mode="sap">
-            <summary class="proof-thm__title">Corolário 4.1 (\(O(n)\))</summary>
-            <p>Se cada objeto se sobrepõe em \(X\) a no máximo \(K\) outros, então \(k \le Kn/2\) e \(T(n) = O(n)\).</p>
-            <p><em>Prova.</em> Cada par sobreposto em \(X\) é contado nos dois objetos: \(2k = \sum_a \#\{b : b \text{ sobrepõe } a \text{ em } X\} \le Kn\). Pelo Teorema 4, \(T(n) = O(n + Kn/2) = O(n)\).</p>
-            <p>A hipótese do corolário vale quando a densidade na projeção é constante: cenas alongadas no eixo de varredura (\(L_x \propto n\)) ou motores que escolhem o eixo de maior variância. A primeira ordenação, ou uma reordenação depois de mudar o conjunto de objetos, custa \(O(n \log n)\).</p>
-          </details>
-          <p>No simulador, a componente da velocidade em \(X\) é sorteada em \(\pm 0{,}5\,v\) e o passo por frame a multiplica por \(v\): na velocidade padrão (\(v = 0{,}8\)), \(\delta \le 0{,}32\), e a condição \(2\delta \lt s_{\min} = 2\) vale até \(v \approx 1{,}4\). Acima disso a ordenação continua correta, só pode custar mais que \(k\).</p>
-
-          <h3>Correção</h3>
-          <p><strong>Completude.</strong> Se \(A\) e \(B\) se sobrepõem, então \(B^{\min}_x \lt A^{\max}_x\) e \(A^{\min}_x \lt B^{\max}_x\). Suponha \(A\) antes de \(B\) na lista (\(A^{\min}_x \le B^{\min}_x\)). Todo objeto entre os dois começa no máximo em \(B^{\min}_x \lt A^{\max}_x\), então a varredura de \(A\) não para antes de chegar a \(B\), e o par é testado.</p>
-          <p><strong>Unicidade.</strong> Só o anterior na lista varre o seguinte.</p>
-
-          <h3>Limites da hipótese: quanto vale k</h3>
-          <p>Pelo lema do Modelo, dois cubos se sobrepõem em \(X\) com probabilidade \(\approx 2\bar s / L\), então \(\mathbb{E}[k] \approx \binom{n}{2}\, \frac{2\bar s}{L}\):</p>
-          <ul class="proof-list">
-            <li><strong>Densidade constante em 3D (H3b):</strong> \(L \propto n^{1/3} \Rightarrow \mathbb{E}[k] = \Theta(n^{5/3})\). Um eixo só não separa o suficiente: os cubos que se alinham em \(X\) podem estar longe em \(y\) e \(z\).</li>
-            <li><strong>Arena fixa (H3a):</strong> \(\mathbb{E}[k] \approx 0{,}2\binom{n}{2} = \Theta(n^2)\). Com \(n = 150\), cerca de 2,2 mil pares contra 11 mil da força bruta.</li>
-            <li><strong>Pior caso:</strong> todos alinhados em \(X\), \(k = \binom{n}{2}\).</li>
-          </ul>
+          <p><em>Prova.</em> <strong>Montagem.</strong> A lista do frame anterior chega quase ordenada: só os \(I\) pares que trocaram de ordem estão fora do lugar. A ordenação por inserção recua cada elemento uma posição por vez, e cada recuo desfaz exatamente uma inversão; além disso, cada elemento faz uma comparação final para parar:</p>
+          \[ M(n) \le (n - 1) + I = O(n) \quad \text{por H2}. \]
+          <p><strong>Consulta.</strong> Para cada cubo \(i\), a varredura percorre os cubos seguintes enquanto eles começam antes de \(i\) terminar, e para no primeiro que começa depois. Como a lista está ordenada, cada passo antes da parada é um par sobreposto em \(X\), visto uma única vez (a partir do cubo que vem antes). São \(k\) passos no total, mais uma parada por cubo:</p>
+          \[ Q(n) \le n + k, \qquad C(n) = k. \]
+          <p><strong>Total.</strong> \(T(n) = M(n) + Q(n) = O(n) + O(n + k) = O(n + k)\).</p>
+          <p><strong>Adendo: o primeiro frame custa \(O(n \log n + k)\).</strong> No primeiro frame, ou quando o conjunto de cubos muda, não há lista anterior e ela é ordenada do zero. Ordenar por comparações custa \(\Theta(n \log n)\): há \(n!\) ordens possíveis, então a árvore de decisão tem altura \(\log_2 n! = \Theta(n \log n)\). Os frames seguintes voltam a \(O(n + k)\).</p>
+          <p><strong>Sem H2:</strong> se a ordem em \(X\) se inverte de um frame para o outro, \(I = \binom{n}{2}\) e a ordenação por inserção custa \(\Theta(n^2)\).</p>
+          <p><strong>Quando \(k\) é grande:</strong> com todos os cubos no mesmo \(x\) e separados em \(y\) e \(z\), \(k = \binom{n}{2} = \Theta(n^2)\) sem nenhuma colisão.</p>
         </section>
 
         <!-- ===================== VERIFICAÇÃO ===================== -->
         <section class="proof-panel" role="tabpanel" id="proof-verificacao" aria-labelledby="proofTab-verificacao" hidden>
-          <h3>1. Cena atual</h3>
-          <p>As quatro estratégias rodam sobre os mesmos cubos da cena, com a célula e a profundidade atuais.</p>
+          <h3>1. Os teoremas na simulação</h3>
+          <p>Para cada algoritmo, uma cena que respeita as hipóteses e outra que as viola, rodando nas mesmas estruturas da simulação. O gráfico, em escala log-log, compara a contagem medida (pontos) com a fórmula da prova (linha tracejada).</p>
+          <div class="proof-actions"><button type="button" id="proofTheoremsBtn" class="btn btn--small">Rodar os cenários</button><span id="proofTheoremsStatus" class="proof-status"></span></div>
+          <div id="proofTheorems" class="proof-checks"></div>
+
+          <h3>2. Cena atual</h3>
+          <p>As quatro estratégias rodam sobre os mesmos cubos da cena e devem achar as mesmas colisões.</p>
           <div class="proof-actions"><button type="button" id="proofSceneBtn" class="btn btn--small">Medir a cena atual</button><span id="proofSceneStatus" class="proof-status"></span></div>
           <div class="table-scroll"><table class="data-table proof-table" id="proofSceneTable" hidden>
             <thead><tr><th>Estratégia</th><th>Pares candidatos \(C\)</th><th>Colisões</th><th>Conferência</th></tr></thead>
@@ -564,21 +497,12 @@
           </table></div>
           <ul class="proof-list" id="proofSceneFacts"></ul>
 
-          <h3>2. Expoente dos pares (experimento de crescimento)</h3>
-          <p>Conta \(C(n)\) para \(n\) de 100 a 1600, com duas cenas por \(n\), nos dois regimes, e ajusta \(C(n) = a\,n^{\kappa}\) por mínimos quadrados em escala log-log. A contagem é determinística: o mesmo navegador ou outro dá o mesmo resultado.</p>
-          <div class="proof-actions"><button type="button" id="proofGrowthBtn" class="btn btn--small">Rodar o experimento</button><span id="proofGrowthStatus" class="proof-status"></span></div>
-          <div class="table-scroll"><table class="data-table proof-table" id="proofGrowthTable" hidden>
-            <thead><tr><th>Estratégia</th><th>\(\kappa\) densidade constante</th><th>previsto</th><th>\(\kappa\) arena fixa</th><th>previsto</th></tr></thead>
-            <tbody></tbody>
-          </table></div>
-
           <h3>3. Tempo (benchmark)</h3>
           <p id="proofBenchText">O benchmark (tecla B) mede o tempo de \(n = 10\) a \(150\) na arena fixa e ajusta \(t = a\,n^{k}\). Rode-o para ver os expoentes aqui.</p>
           <div class="table-scroll"><table class="data-table proof-table" id="proofBenchTable" hidden>
             <thead><tr><th>Estratégia</th><th>\(k\) medido</th><th>\(R^2\)</th></tr></thead>
             <tbody></tbody>
           </table></div>
-          <p class="proof-note">Os testes automáticos (<code>npm test</code>) conferem, em cenas com semente e ao longo de vários frames, que a grade, a Octree e o Sweep and Prune acham exatamente as colisões da força bruta, sem repetir pares, e verificam os expoentes deste experimento.</p>
         </section>
       </div>
     </div>

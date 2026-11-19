@@ -1,7 +1,8 @@
 // --- proof.js — Janela "Prova de complexidade" ---
 // O texto das provas está em simulador.html, com fórmulas em TeX. O KaTeX só é baixado
-// na primeira vez que a janela abre. A aba Verificação roda as estratégias sobre a cena
-// atual, dispara o experimento de crescimento no worker e mostra o último benchmark.
+// na primeira vez que a janela abre. A aba Verificação roda no worker os cenários de cada
+// teorema (com e sem as hipóteses, theorem-checks.js), mede a cena atual e mostra o
+// último benchmark.
 import { state, playSound } from './physics.js';
 import { MODES, createStructures, countPairs, ARENA_HALF_XZ } from './broadphase.js';
 import { STRATEGY } from './strategies.js';
@@ -87,7 +88,151 @@ function loadMath() {
   return mathPromise;
 }
 
-// ====================== 1. CENA ATUAL ======================
+// ====================== 1. TEOREMAS: COM E SEM AS HIPÓTESES ======================
+const theoremsBox = document.getElementById('proofTheorems');
+const theoremsStatus = document.getElementById('proofTheoremsStatus');
+const theoremsBtn = document.getElementById('proofTheoremsBtn');
+const SVG_NS = 'http://www.w3.org/2000/svg';
+const SUP = { '-': '⁻', 0: '⁰', 1: '¹', 2: '²', 3: '³', 4: '⁴', 5: '⁵', 6: '⁶', 7: '⁷', 8: '⁸', 9: '⁹' };
+const pow10 = e => '10' + String(e).split('').map(ch => SUP[ch]).join('');
+const fmtRatio = r => r.toFixed(r >= 0.995 && r <= 1.005 ? 2 : 3).replace('.', ',');
+
+function svgEl(name, attrs, text) {
+  const el = document.createElementNS(SVG_NS, name);
+  for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+  if (text !== undefined) el.textContent = text;
+  return el;
+}
+
+// Gráfico log-log: pontos medidos e a curva da prova (tracejada) de cada cenário
+function theoremChart(check) {
+  const W = 560, H = 230, ml = 46, mr = 14, mt = 12, mb = 30;
+  const pts = check.scenarios.flatMap(s => s.points.flatMap(p => [
+    { n: p.n, y: p.measured }, { n: p.n, y: p.theory },
+  ])).filter(p => p.y > 0);
+  const lx = pts.map(p => Math.log10(p.n)), ly = pts.map(p => Math.log10(p.y));
+  const x0 = Math.floor(Math.min(...lx) * 2) / 2, x1 = Math.ceil(Math.max(...lx) * 2) / 2;
+  const y0 = Math.floor(Math.min(...ly)), y1 = Math.ceil(Math.max(...ly));
+  const X = n => ml + ((Math.log10(n) - x0) / (x1 - x0)) * (W - ml - mr);
+  const Y = v => mt + (1 - (Math.log10(v) - y0) / (y1 - y0)) * (H - mt - mb);
+
+  const svg = svgEl('svg', {
+    viewBox: `0 0 ${W} ${H}`, class: 'proof-chart', role: 'img',
+    'aria-label': `${check.theorem}: ${check.metric}, medido contra a curva da prova, em escala log-log`,
+  });
+  for (let e = y0; e <= y1; e++) {
+    svg.append(svgEl('line', { x1: ml, x2: W - mr, y1: Y(10 ** e), y2: Y(10 ** e), class: 'proof-chart__grid' }));
+    svg.append(svgEl('text', { x: ml - 8, y: Y(10 ** e) + 4, 'text-anchor': 'end', class: 'proof-chart__tick' }, pow10(e)));
+  }
+  for (let e = Math.ceil(x0); e <= Math.floor(x1); e++) {
+    svg.append(svgEl('line', { x1: X(10 ** e), x2: X(10 ** e), y1: mt, y2: H - mb, class: 'proof-chart__grid' }));
+    svg.append(svgEl('text', { x: X(10 ** e), y: H - mb + 18, 'text-anchor': 'middle', class: 'proof-chart__tick' }, pow10(e)));
+  }
+  svg.append(svgEl('text', { x: W - mr, y: H - 4, 'text-anchor': 'end', class: 'proof-chart__tick' }, 'n'));
+  for (const s of check.scenarios) {
+    const cls = `proof-chart__${s.kind}`;
+    const line = s.points.filter(p => p.theory > 0)
+      .map(p => `${X(p.n).toFixed(1)},${Y(p.theory).toFixed(1)}`).join(' ');
+    svg.append(svgEl('polyline', { points: line, class: `${cls} proof-chart__theory` }));
+    for (const p of s.points) {
+      if (p.measured <= 0) continue;
+      svg.append(svgEl('circle', { cx: X(p.n), cy: Y(p.measured), r: 4, class: `${cls} proof-chart__dot` }));
+    }
+  }
+  return svg;
+}
+
+// Resumo de um cenário: a contagem bate com a fórmula (exata) ou fica abaixo do limite
+function verdict(s) {
+  const ratios = s.points.map(p => p.measured / p.theory);
+  const lo = Math.min(...ratios), hi = Math.max(...ratios);
+  if (!s.bound) {
+    const exact = s.points.every(p => Math.abs(p.measured - p.theory) <= 1e-9 * Math.max(1, p.theory));
+    return exact ? 'Medido = fórmula em todos os n ✓' : `Medido/fórmula de ${fmtRatio(lo)} a ${fmtRatio(hi)} ✗`;
+  }
+  const ok = s.points.every(p => p.measured <= p.theory);
+  return `${ok ? 'Medido ≤ limite' : 'Acima do limite'} em todos os n, razão de ${fmtRatio(lo)} a ${fmtRatio(hi)} ${ok ? '✓' : '✗'}`;
+}
+
+function theoremBlock(check) {
+  const block = document.createElement('article');
+  block.className = 'proof-check';
+  block.dataset.mode = check.mode;
+
+  const title = document.createElement('p');
+  title.className = 'proof-check__title';
+  const key = document.createElement('span');
+  key.className = 'proof-key';
+  key.textContent = check.theorem;
+  title.append(key, ` · ${check.metric}`);
+
+  const legend = document.createElement('ul');
+  legend.className = 'proof-check__legend';
+  for (const s of check.scenarios) {
+    const li = document.createElement('li');
+    li.className = `proof-check__${s.kind}`;
+    const head = document.createElement('strong');
+    head.textContent = s.kind === 'ok' ? 'Respeita: ' : 'Viola: ';
+    li.append(head, `${s.label}. Curva ${s.bound ? '(limite)' : '(exata)'}: ${s.theoryLabel}. ${verdict(s)}`);
+    legend.appendChild(li);
+  }
+
+  const details = document.createElement('details');
+  details.className = 'proof-check__numbers';
+  const summary = document.createElement('summary');
+  summary.textContent = 'ver os números';
+  const wrap = document.createElement('div');
+  wrap.className = 'table-scroll';
+  const table = document.createElement('table');
+  table.className = 'data-table proof-table';
+  const head = table.createTHead().insertRow();
+  for (const h of ['Cenário', 'n', 'medido', 'curva', 'medido/curva']) {
+    const th = document.createElement('th');
+    th.textContent = h;
+    head.appendChild(th);
+  }
+  const tbody = table.createTBody();
+  for (const s of check.scenarios) {
+    for (const p of s.points) {
+      tbody.appendChild(row([
+        s.kind === 'ok' ? 'respeita' : 'viola', fmt(p.n), fmt(p.measured), fmt(p.theory), fmtRatio(p.measured / p.theory),
+      ]));
+    }
+  }
+  wrap.appendChild(table);
+  details.append(summary, wrap);
+
+  block.append(title, theoremChart(check), legend, details);
+  return block;
+}
+
+let theoremsWorker = null;
+
+theoremsBtn.addEventListener('click', () => {
+  theoremsWorker?.terminate();
+  theoremsWorker = new Worker(new URL('./bench-worker.js', import.meta.url), { type: 'module' });
+  theoremsBtn.disabled = true;
+  theoremsStatus.textContent = 'começando';
+  theoremsWorker.onmessage = ({ data }) => {
+    if (data.type === 'theorems-progress') {
+      theoremsStatus.textContent = `${data.theorem} (${data.index + 1} de ${data.total})`;
+    } else if (data.type === 'theorems-done') {
+      theoremsBox.replaceChildren(...data.results.map(theoremBlock));
+      theoremsStatus.textContent = 'medido agora, nas estruturas da simulação';
+      theoremsBtn.disabled = false;
+      theoremsWorker.terminate();
+      theoremsWorker = null;
+    }
+  };
+  theoremsWorker.onerror = e => {
+    theoremsStatus.textContent = 'os cenários falharam; veja o console';
+    console.error(e.message);
+    theoremsBtn.disabled = false;
+  };
+  theoremsWorker.postMessage({ type: 'theorems' });
+});
+
+// ====================== 2. CENA ATUAL ======================
 const sceneTable = document.getElementById('proofSceneTable');
 const sceneFacts = document.getElementById('proofSceneFacts');
 const sceneStatus = document.getElementById('proofSceneStatus');
@@ -144,54 +289,11 @@ document.getElementById('proofSceneBtn').addEventListener('click', () => {
   const predK = pairsAll * (2 * sMean) / L;
   sceneFacts.replaceChildren(
     fact(`n = ${n}, lado médio dos cubos s̄ = ${sMean.toFixed(2).replace('.', ',')}, célula ${state.cellSize}, profundidade ${state.octreeDepth}.`),
-    fact(`Octree: ${S} cubos ficaram na raiz por cruzarem os planos centrais (previsto 2n·s̄/L ≈ ${predS.toFixed(0)}). Só entre eles são ${fmt(S * (S - 1) / 2)} pares, a parcela que dá o Ω(n^(4/3)).`),
+    fact(`Octree: ${S} cubos ficaram na raiz por cruzarem os planos centrais (previsto 2n·s̄/L ≈ ${predS.toFixed(0)}). Só entre eles são ${fmt(S * (S - 1) / 2)} pares.`),
     fact(`Sweep and Prune: k = ${fmt(results.sap.candidates)} pares se sobrepõem em X (previsto C(n,2)·2s̄/L ≈ ${fmt(predK)}).`),
     fact(`Grade: ${fmt(results.grid.candidates)} pares candidatos, ${(100 * results.grid.candidates / pairsAll).toFixed(1).replace('.', ',')}% dos da força bruta.`),
   );
   sceneStatus.textContent = 'medido agora';
-});
-
-// ====================== 2. EXPERIMENTO DE CRESCIMENTO ======================
-const growthTable = document.getElementById('proofGrowthTable');
-const growthStatus = document.getElementById('proofGrowthStatus');
-const growthBtn = document.getElementById('proofGrowthBtn');
-const PREDICTED = {
-  brute: ['2', '2'],
-  grid: ['1', '2'],
-  octree: ['≥ 4/3', '2'],
-  sap: ['5/3 ≈ 1,67', '2'],
-};
-let growthWorker = null;
-
-growthBtn.addEventListener('click', () => {
-  growthWorker?.terminate();
-  growthWorker = new Worker(new URL('./bench-worker.js', import.meta.url), { type: 'module' });
-  growthBtn.disabled = true;
-  growthStatus.textContent = 'começando';
-  growthWorker.onmessage = ({ data }) => {
-    if (data.type === 'growth-progress') {
-      const regime = data.regime === 'constante' ? 'densidade constante' : 'arena fixa';
-      growthStatus.textContent = `${regime}: n = ${data.n} (${data.index + 1} de ${data.total})`;
-    } else if (data.type === 'growth-done') {
-      const [constant, fixed] = data.results;
-      growthTable.tBodies[0].replaceChildren(...MODES.map(m => row([
-        STRATEGY[m].short,
-        fmtK(constant.fits[m].k), PREDICTED[m][0],
-        fmtK(fixed.fits[m].k), PREDICTED[m][1],
-      ], m)));
-      growthTable.hidden = false;
-      growthStatus.textContent = `n de ${constant.sizes[0]} a ${constant.sizes[constant.sizes.length - 1]} · célula ${state.cellSize} · profundidade ${state.octreeDepth}`;
-      growthBtn.disabled = false;
-      growthWorker.terminate();
-      growthWorker = null;
-    }
-  };
-  growthWorker.onerror = e => {
-    growthStatus.textContent = 'o experimento falhou; veja o console';
-    console.error(e.message);
-    growthBtn.disabled = false;
-  };
-  growthWorker.postMessage({ type: 'growth', cellSize: state.cellSize, octreeDepth: state.octreeDepth });
 });
 
 // ====================== 3. BENCHMARK ======================
