@@ -457,13 +457,13 @@
           \[ Q(n) \;\le\; \sum_{c \text{ ocupada}} \binom{K}{2} \;\le\; m\,n \cdot \frac{K(K-1)}{2} \;=\; O(n). \]
           <p>Cada par candidato é entregue uma vez (unicidade, abaixo), então \(C(n) \le Q(n)\). Somando, \(T(n) = M(n) + Q(n) = O(n)\).</p>
 
-          <div class="proof-thm proof-thm--cor" data-mode="grid">
-            <p class="proof-thm__title">Corolário 2.1 (densidade constante)</p>
+          <details class="proof-thm proof-thm--cor" data-mode="grid">
+            <summary class="proof-thm__title">Corolário 2.1 (densidade constante)</summary>
             <p>Sob H1, H2 e H3b, \(\mathbb{E}[Q(n)] = \Theta(n)\) e \(\mathbb{E}[T(n)] = \Theta(n)\).</p>
-          </div>
-          <p><em>Prova.</em> Dois cubos só partilham uma célula se seus centros distam menos de \(r = s_{\max} + c\) em cada eixo, e partilham no máximo \(m\) células. Cada par dentro de uma célula conta uma vez em \(Q\), então, pelo lema do Modelo,</p>
-          \[ \mathbb{E}[Q] \;\le\; m \binom{n}{2} \frac{(2r)^3}{V} = \Theta\!\left(\frac{n^2}{V}\right) = \Theta(\rho\, n). \]
-          <p>Com densidade \(\rho = n/V\) constante, \(\mathbb{E}[Q] = O(n)\). Como \(M(n) \ge n\) (todo cubo é inserido), \(\mathbb{E}[T] = \Theta(n)\).</p>
+            <p><em>Prova.</em> Dois cubos só partilham uma célula se seus centros distam menos de \(r = s_{\max} + c\) em cada eixo, e partilham no máximo \(m\) células. Cada par dentro de uma célula conta uma vez em \(Q\), então, pelo lema do Modelo,</p>
+            \[ \mathbb{E}[Q] \;\le\; m \binom{n}{2} \frac{(2r)^3}{V} = \Theta\!\left(\frac{n^2}{V}\right) = \Theta(\rho\, n). \]
+            <p>Com densidade \(\rho = n/V\) constante, \(\mathbb{E}[Q] = O(n)\). Como \(M(n) \ge n\) (todo cubo é inserido), \(\mathbb{E}[T] = \Theta(n)\).</p>
+          </details>
 
           <h3>Correção</h3>
           <p><strong>Completude.</strong> Se \(A\) e \(B\) se sobrepõem, as projeções em cada eixo se tocam, então as faixas de índices de célula se interceptam em cada eixo e os dois partilham ao menos uma célula: o par é enumerado.</p>
@@ -494,13 +494,13 @@
           \[ C(n) \;\le\; K(D+1)\, n. \]
           <p><strong>Travessia.</strong> Cada nó interno nasceu de uma folha com mais de \(K\) objetos; os nós internos de uma mesma profundidade são disjuntos, então há no máximo \(n/K\) por nível e \(O(nD/K)\) no total, com 8 filhos cada. Visitar os nós custa \(O(nD)\). Somando, \(T(n) = O(nD) + O(K D n) = O(nD)\).</p>
 
-          <div class="proof-thm proof-thm--cor" data-mode="octree">
-            <p class="proof-thm__title">Corolário 3.1 (objetos pontuais uniformes)</p>
+          <details class="proof-thm proof-thm--cor" data-mode="octree">
+            <summary class="proof-thm__title">Corolário 3.1 (objetos pontuais uniformes)</summary>
             <p>Para \(n\) pontos independentes e uniformes na raiz, a profundidade satisfaz \(D \le \tfrac{K+1}{K}\log_8 n + t\) com probabilidade ao menos \(1 - 8^{-tK}\). Logo \(D = O(\log n)\) com alta probabilidade e \(T(n) = O(n \log n)\).</p>
-          </div>
-          <p><em>Prova.</em> Pontos não cruzam planos, então a hipótese de ocupação do Teorema 3 vale por construção: só folhas guardam objetos, com no máximo \(K\) cada. Um nó de profundidade \(d\) cobre uma fração \(8^{-d}\) da raiz, então contém cada ponto com probabilidade \(8^{-d}\). A árvore chega à profundidade \(d+1\) só se algum nó de profundidade \(d\) tem mais de \(K\) pontos. Pela cota da união sobre os \(8^d\) nós e sobre os conjuntos de \(K+1\) pontos:</p>
-          \[ P(D \gt d) \;\le\; 8^d \binom{n}{K+1} 8^{-d(K+1)} \;\le\; 8^d \left(n\, 8^{-d}\right)^{K+1} = n^{K+1}\, 8^{-dK}. \]
-          <p>Com \(d = \tfrac{K+1}{K}\log_8 n + t\), o lado direito vale \(8^{-tK}\). Aplicando o Teorema 3, \(T(n) = O(n \log n)\) com alta probabilidade.</p>
+            <p><em>Prova.</em> Pontos não cruzam planos, então a hipótese de ocupação do Teorema 3 vale por construção: só folhas guardam objetos, com no máximo \(K\) cada. Um nó de profundidade \(d\) cobre uma fração \(8^{-d}\) da raiz, então contém cada ponto com probabilidade \(8^{-d}\). A árvore chega à profundidade \(d+1\) só se algum nó de profundidade \(d\) tem mais de \(K\) pontos. Pela cota da união sobre os \(8^d\) nós e sobre os conjuntos de \(K+1\) pontos:</p>
+            \[ P(D \gt d) \;\le\; 8^d \binom{n}{K+1} 8^{-d(K+1)} \;\le\; 8^d \left(n\, 8^{-d}\right)^{K+1} = n^{K+1}\, 8^{-dK}. \]
+            <p>Com \(d = \tfrac{K+1}{K}\log_8 n + t\), o lado direito vale \(8^{-tK}\). Aplicando o Teorema 3, \(T(n) = O(n \log n)\) com alta probabilidade.</p>
+          </details>
           <p>No simulador a profundidade máxima é escolhida no controle (1 a 10). Com \(D\) fixo e ocupação limitada, o Teorema 3 dá \(O(n)\); mas, com \(D\) fixo, a ocupação das folhas cresce com \(n\), e a hipótese só se mantém se \(D\) acompanhar \(\log_8 n\).</p>
 
           <h3>Correção</h3>
@@ -532,12 +532,12 @@
           \[ Q(n) = n + k, \qquad C(n) = k. \]
           <p><strong>Coerência temporal.</strong> Dois objetos só trocam de ordem entre frames se seus inícios se cruzaram. Com deslocamento de no máximo \(\delta\) cada, os inícios estavam a menos de \(2\delta\) um do outro antes e depois da troca. Como \(2\delta \lt s_{\min}\) e todo intervalo tem comprimento \(\ge s_{\min}\), o que começa depois começa antes de o outro terminar: os dois se sobrepõem em \(X\). Logo cada inversão é um par contado em \(k\), \(I \le k\), e \(T(n) = (n - 1 + I) + (n + k) = O(n + k)\).</p>
 
-          <div class="proof-thm proof-thm--cor" data-mode="sap">
-            <p class="proof-thm__title">Corolário 4.1 (\(O(n)\))</p>
+          <details class="proof-thm proof-thm--cor" data-mode="sap">
+            <summary class="proof-thm__title">Corolário 4.1 (\(O(n)\))</summary>
             <p>Se cada objeto se sobrepõe em \(X\) a no máximo \(K\) outros, então \(k \le Kn/2\) e \(T(n) = O(n)\).</p>
-          </div>
-          <p><em>Prova.</em> Cada par sobreposto em \(X\) é contado nos dois objetos: \(2k = \sum_a \#\{b : b \text{ sobrepõe } a \text{ em } X\} \le Kn\). Pelo Teorema 4, \(T(n) = O(n + Kn/2) = O(n)\).</p>
-          <p>A hipótese do corolário vale quando a densidade na projeção é constante: cenas alongadas no eixo de varredura (\(L_x \propto n\)) ou motores que escolhem o eixo de maior variância. A primeira ordenação, ou uma reordenação depois de mudar o conjunto de objetos, custa \(O(n \log n)\).</p>
+            <p><em>Prova.</em> Cada par sobreposto em \(X\) é contado nos dois objetos: \(2k = \sum_a \#\{b : b \text{ sobrepõe } a \text{ em } X\} \le Kn\). Pelo Teorema 4, \(T(n) = O(n + Kn/2) = O(n)\).</p>
+            <p>A hipótese do corolário vale quando a densidade na projeção é constante: cenas alongadas no eixo de varredura (\(L_x \propto n\)) ou motores que escolhem o eixo de maior variância. A primeira ordenação, ou uma reordenação depois de mudar o conjunto de objetos, custa \(O(n \log n)\).</p>
+          </details>
           <p>No simulador, a componente da velocidade em \(X\) é sorteada em \(\pm 0{,}5\,v\) e o passo por frame a multiplica por \(v\): na velocidade padrão (\(v = 0{,}8\)), \(\delta \le 0{,}32\), e a condição \(2\delta \lt s_{\min} = 2\) vale até \(v \approx 1{,}4\). Acima disso a ordenação continua correta, só pode custar mais que \(k\).</p>
 
           <h3>Correção</h3>

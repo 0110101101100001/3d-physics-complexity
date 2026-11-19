@@ -679,6 +679,13 @@ body.presentation-mode #presentOverlay { opacity: 1; visibility: visible; }
 .proof-thm p { max-width: none; }
 .proof-thm__title { font-family: var(--font-mono); font-size: 13px; font-weight: 500; color: var(--ink); }
 .proof-thm--cor { border-left-style: dashed; }
+details.proof-thm--cor > summary { display: flex; align-items: center; gap: 8px; cursor: pointer; list-style: none; user-select: none; }
+details.proof-thm--cor > summary::-webkit-details-marker { display: none; }
+details.proof-thm--cor > summary::before { content: ""; width: 6px; height: 6px; border-right: 1.5px solid var(--ink-soft); border-bottom: 1.5px solid var(--ink-soft); transform: rotate(-45deg); transition: transform .15s ease; flex: none; }
+details.proof-thm--cor[open] > summary::before { transform: rotate(45deg); }
+details.proof-thm--cor > summary:hover { color: var(--mode-text); }
+details.proof-thm--cor > summary:focus-visible { outline: 2px solid var(--key); outline-offset: 4px; border-radius: 2px; }
+details.proof-thm--cor[open] > summary { margin-bottom: 4px; }
 .proof-thm + p { margin-top: 14px; }
 .proof-ref { margin-left: 6px; font-size: 11px; color: var(--ink-soft); }
 .proof-key { display: inline-flex; align-items: center; gap: 7px; }
