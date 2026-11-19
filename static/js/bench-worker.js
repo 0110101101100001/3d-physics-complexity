@@ -11,9 +11,7 @@
 // Ou { type: 'growth', cellSize, octreeDepth }: o experimento de crescimento da aba
 // "Prova de complexidade" (pares contados nos dois regimes de densidade). Envia
 //   { type: 'growth-progress', regime, n, index, total } e { type: 'growth-done', results }
-//
-// Ou { type: 'asymptotic' }: as contagens de operações do gráfico assintótico
-// (asymptotic.js). Envia { type: 'asymptotic-progress', ... } e { type: 'asymptotic-done', ok }
+
 //
 // Ou { type: 'theorems' }: os cenários de cada teorema (theorem-checks.js), com e sem as
 // hipóteses. Envia { type: 'theorems-progress', theorem, index, total } e
@@ -24,7 +22,6 @@ import {
   measureTotal, measurePhases, fitPowerLaw, growthExperiment,
 } from './broadphase.js';
 import { theoremExperiment } from './theorem-checks.js';
-import { measureAsymptotic } from './asymptotic.js';
 
 // Ajuste empírico: mede cada estratégia em cenas sintéticas de vários N e ajusta
 // t = a·n^k por mínimos quadrados em escala log-log.
@@ -65,11 +62,6 @@ function curveFit(params) {
 }
 
 self.onmessage = ({ data }) => {
-  if (data.type === 'asymptotic') {
-    const onProgress = p => postMessage({ type: 'asymptotic-progress', ...p });
-    postMessage({ type: 'asymptotic-done', ok: measureAsymptotic({ onProgress }) });
-    return;
-  }
   if (data.type === 'theorems') {
     const results = theoremExperiment({ onProgress: p => postMessage({ type: 'theorems-progress', ...p }) });
     postMessage({ type: 'theorems-done', results });

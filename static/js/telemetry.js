@@ -1,8 +1,8 @@
-// --- telemetry.js — Médias de tempo, custo por fase e gráfico assintótico ---
+// --- telemetry.js — Médias de tempo, custo por fase e gráfico de crescimento ---
 import { state, RACE_MODES } from './physics.js';
 import { STRATEGIES, strategyOf } from './strategies.js';
-import { setText, fmtLiveMs } from './dom.js';
-import { THEORY, theoryCrossings, N_MIN, N_MAX } from './asymptotic.js';
+import { setText, fmtLiveMs, fmtTime } from './dom.js';
+import { measureTotal, createStructures } from './broadphase.js';
 
 // ====================== DESEMPENHO ======================
 // Janela deslizante de amostras por N, com média aparada (15% em cada ponta).
@@ -88,24 +88,22 @@ export function currentAverageTime() {
 // Cada frame mede a detecção com performance.now(). Abaixo da resolução do relógio
 // muitos frames leem 0; a média simples de 60 frames soma esses degraus e recupera o
 // valor médio (a média aparada descartaria justamente os poucos frames não nulos).
-// Se todos os frames leram 0, só dá para dizer que o tempo ficou abaixo da resolução.
-const CLOCK_RES = (() => {
-  let best = Infinity;
-  for (let r = 0; r < 5; r++) {
-    const t0 = performance.now();
-    let t1 = t0;
-    while (t1 === t0) t1 = performance.now();
-    best = Math.min(best, t1 - t0);
-  }
-  return best;
-})();
+// Se todos os frames leram 0 (cena pequena, relógio grosso), o tempo é medido à parte:
+// a detecção roda em lote até somar 1 ms (measureTotal), no máximo a cada 500 ms.
+// Isso só acontece com cenas de microssegundos, então custa no máximo ~1 ms por vez.
+const BATCH_EVERY_MS = 500;
+let batchCache = { key: '', at: -Infinity, ms: 0 };
 
-function fmtDuration(ms) {
-  if (ms < 1) {
-    const us = ms * 1000;
-    return `${us.toFixed(us < 10 ? 2 : 1).replace('.', ',')} µs`;
+function batchedTime() {
+  const mode = state.currentBroadPhase;
+  const key = `${mode}:${state.cubes.length}:${state.cellSize}:${state.octreeDepth}`;
+  const now = performance.now();
+  if (batchCache.key !== key || now - batchCache.at > BATCH_EVERY_MS) {
+    // estruturas próprias, com os parâmetros da cena, para não mexer nas da simulação
+    const structures = createStructures({ cellSize: state.cellSize, octreeDepth: state.octreeDepth });
+    batchCache = { key, at: now, ms: measureTotal(mode, state.cubes, structures, 1, 5) };
   }
-  return `${ms.toFixed(2).replace('.', ',')} ms`;
+  return batchCache.ms;
 }
 
 export function currentTimeReadout() {
@@ -113,37 +111,30 @@ export function currentTimeReadout() {
   const arr = store?.samples.get(state.cubes.length);
   if (!arr || arr.length === 0) return '—';
   const mean = arr.reduce((s, v) => s + v, 0) / arr.length;
-  return mean > 0 ? fmtDuration(mean) : `< ${fmtDuration(CLOCK_RES)}`;
+  return fmtTime(mean > 0 ? mean : batchedTime());
 }
 
-// ====================== GRÁFICO ASSINTÓTICO ======================
-// Log-log de verdade: x = log10(n), de 10 a 10⁷; y = log10(operações), com operações =
-// testes de par + inserções, a grandeza que os teoremas da "Prova de complexidade"
-// limitam. Tracejado: as fórmulas dos teoremas com as constantes de asymptotic.js.
-// Marcadores: contagens feitas no worker, nas mesmas estruturas da simulação.
-// Abaixo, T(n)/n com x em log10(n) e y linear: Θ(n) vira reta horizontal e
-// Θ(n log n), reta inclinada. Os dois gráficos são SVG com viewBox e width 100%.
-const mainSvg = document.getElementById('perfChart');
-const ratioSvg = document.getElementById('perfRatioChart');
-const chartNote = document.getElementById('chartNote');
-const chartKeyMeasured = document.getElementById('chartKeyMeasured');
-const crossingsBody = document.getElementById('chartCrossings');
+// ====================== GRÁFICO DE CRESCIMENTO ======================
+// Gráfico teórico das curvas assintóticas de cada estratégia: n² (força bruta),
+// n log n (Octree), n + k (Sweep and Prune, com k = 2n pares sobrepostos no eixo) e
+// n (grade). Sem números nos eixos: o que importa é a forma quando n → ∞, então os
+// eixos e as curvas terminam em seta, indicando que continuam crescendo.
+// SVG com viewBox e width 100%; é estático, então é desenhado uma vez só.
+const chartSvg = document.getElementById('perfChart');
 const chartPanelEl = document.getElementById('chartPanel');
-
-const COLOR = Object.fromEntries(STRATEGIES.map(st => [st.key, st.color]));
-const NAME = {
-  brute: 'força bruta n(n−1)/2', grid: 'grade c_g·n', octree: 'octree c_o·n·log₈ n',
-  octreeD: 'octree c_o·n·D', sap: 'SAP n·log₂ n + k', sapH2: 'SAP n + k (H2)',
-};
-const CROSSINGS = theoryCrossings();
-const RATIO_MAX = 80;     // topo do gráfico T(n)/n
 const SVG_NS = 'http://www.w3.org/2000/svg';
+const COLOR = Object.fromEntries(STRATEGIES.map(st => [st.key, st.color]));
 
-let measured = null;
-let measuring = false;
-let lastN = -1;
+const N_MAX = 100;     // escala interna do desenho (não aparece no gráfico)
+const Y_MAX = 1000;
+const CURVES = [
+  { mode: 'brute', label: 'n²', f: n => n * n },
+  { mode: 'octree', label: 'n log n', f: n => (n > 1 ? n * Math.log2(n) : 0) },
+  { mode: 'sap', label: 'n + k', f: n => n + 2 * n },
+  { mode: 'grid', label: 'n', f: n => n },
+];
 
-const lx = Math.log10;
+let drawn = false;
 
 function el(name, attrs = {}, text) {
   const node = document.createElementNS(SVG_NS, name);
@@ -152,199 +143,63 @@ function el(name, attrs = {}, text) {
   return node;
 }
 
-const SUP = { '-': '⁻', 0: '⁰', 1: '¹', 2: '²', 3: '³', 4: '⁴', 5: '⁵', 6: '⁶', 7: '⁷', 8: '⁸', 9: '⁹' };
-const pow10Label = e => '10' + String(e).split('').map(ch => SUP[ch]).join('');
-
-// Geometria comum: viewBox, margens e o eixo x em log10(n)
-function frame(H, mb = 30) {
-  const W = 300, ml = 40, mr = 8, mt = 8;
-  const X = n => ml + ((lx(n) - lx(N_MIN)) / (lx(N_MAX) - lx(N_MIN))) * (W - ml - mr);
-  return { W, H, ml, mr, mt, mb, X, x0: ml, x1: W - mr, y0: mt, y1: H - mb };
+// Ponta de seta em (x, y) apontando na direção (dx, dy)
+function arrowHead(x, y, dx, dy, color, size = 6) {
+  const len = Math.hypot(dx, dy) || 1;
+  const ux = dx / len, uy = dy / len;
+  const bx = x - ux * size, by = y - uy * size;
+  const px = -uy * size * 0.5, py = ux * size * 0.5;
+  return el('path', { d: `M${x},${y} L${bx + px},${by + py} L${bx - px},${by - py} Z`, fill: color });
 }
 
-// Grade vertical e marcas do eixo x em 10, 10², …, 10⁷
-function xAxis(g, f) {
-  for (let e = lx(N_MIN); e <= lx(N_MAX); e++) {
-    g.append(el('line', { x1: f.X(10 ** e), x2: f.X(10 ** e), y1: f.y0, y2: f.y1, class: 'ac-grid' }));
-    g.append(el('text', { x: f.X(10 ** e), y: f.y1 + 11, 'text-anchor': 'middle', class: 'ac-tick' }, pow10Label(e)));
-  }
-  g.append(el('text', { x: (f.x0 + f.x1) / 2, y: f.H - 4, 'text-anchor': 'middle', class: 'ac-label' }, 'n (cubos), escala log'));
-}
+function drawGrowth() {
+  const W = 300, H = 200, ml = 22, mr = 62, mt = 14, mb = 22;
+  const X = n => ml + (n / N_MAX) * (W - ml - mr);
+  const Y = v => mt + (1 - v / Y_MAX) * (H - mt - mb);
+  chartSvg.replaceChildren();
 
-function yLabel(g, f, text) {
-  const cy = (f.y0 + f.y1) / 2;
-  g.append(el('text', { x: 9, y: cy, transform: `rotate(-90 9 ${cy})`, 'text-anchor': 'middle', class: 'ac-label' }, text));
-}
+  // eixos com seta: n → ∞ e operações → ∞
+  const axis = 'rgba(255,255,255,0.45)';
+  const x0 = ml, y0 = H - mb, xEnd = W - mr + 30, yEnd = mt - 8;
+  chartSvg.append(el('line', { x1: x0, y1: y0, x2: xEnd, y2: y0, stroke: axis, 'stroke-width': 1 }));
+  chartSvg.append(arrowHead(xEnd + 1, y0, 1, 0, axis));
+  chartSvg.append(el('line', { x1: x0, y1: y0, x2: x0, y2: yEnd, stroke: axis, 'stroke-width': 1 }));
+  chartSvg.append(arrowHead(x0, yEnd - 1, 0, -1, axis));
+  chartSvg.append(el('text', { x: xEnd, y: y0 + 15, 'text-anchor': 'end', class: 'ac-label' }, 'n → ∞'));
+  chartSvg.append(el('text', { x: x0 - 4, y: y0 + 4, 'text-anchor': 'end', class: 'ac-label' }, '0'));
+  const cy = (mt + y0) / 2;
+  chartSvg.append(el('text', { x: 10, y: cy, transform: `rotate(-90 10 ${cy})`, 'text-anchor': 'middle', class: 'ac-label' }, 'operações'));
 
-function clipArea(svg, f, id) {
-  const clip = el('clipPath', { id });
-  clip.append(el('rect', { x: f.x0, y: f.y0, width: f.x1 - f.x0, height: f.y1 - f.y0 }));
-  const defs = el('defs');
-  defs.append(clip);
-  svg.append(defs);
-  return el('g', { 'clip-path': `url(#${id})` });
-}
-
-// Curva teórica amostrada em log n
-function curvePath(f, Y, theory, map = v => v) {
-  const steps = 160;
-  const pts = [];
-  for (let s = 0; s <= steps; s++) {
-    const n = 10 ** (lx(N_MIN) + ((lx(N_MAX) - lx(N_MIN)) * s) / steps);
-    pts.push(`${f.X(n).toFixed(2)},${Y(map(theory.f(n), n)).toFixed(2)}`);
-  }
-  return el('polyline', {
-    points: pts.join(' '), stroke: COLOR[theory.mode], class: theory.light ? 'ac-theory ac-theory--light' : 'ac-theory',
-  });
-}
-
-// Marcador: cheio = medido; vazado = SAP medido no frame seguinte, sob H2
-function marker(x, y, color, hollow) {
-  return el('circle', {
-    cx: x.toFixed(2), cy: y.toFixed(2), r: 2.8,
-    fill: hollow ? 'none' : color, stroke: hollow ? color : 'var(--well)', 'stroke-width': hollow ? 1.3 : 0.8,
-  });
-}
-
-function seriesList() {
-  if (!measured) return [];
-  return [
-    { mode: 'brute', pts: measured.brute },
-    { mode: 'grid', pts: measured.grid },
-    { mode: 'octree', pts: measured.octree },
-    { mode: 'sap', pts: measured.sap },
-    { mode: 'sap', hollow: true, pts: measured.sapH2 },
-  ];
-}
-
-function drawMain() {
-  const f = frame(270);
-  const yLo = 1, yHi = 14;   // 10¹ a 10¹⁴ operações
-  const Y = v => f.y0 + (1 - (lx(Math.max(v, 1e-9)) - yLo) / (yHi - yLo)) * (f.y1 - f.y0);
-  mainSvg.replaceChildren();
-  const axes = el('g');
-  xAxis(axes, f);
-  for (let e = yLo; e <= yHi; e++) {
-    axes.append(el('line', { x1: f.x0, x2: f.x1, y1: Y(10 ** e), y2: Y(10 ** e), class: 'ac-grid' }));
-    axes.append(el('text', { x: f.x0 - 3, y: Y(10 ** e) + 3, 'text-anchor': 'end', class: 'ac-tick' }, pow10Label(e)));
-  }
-  yLabel(axes, f, 'Operações (testes de par + inserções)');
-  mainSvg.append(axes);
-
-  const plot = clipArea(mainSvg, f, 'acMainClip');
-  // N atual da cena
-  const N = state.cubes.length;
-  if (N >= N_MIN) plot.append(el('line', { x1: f.X(N), x2: f.X(N), y1: f.y0, y2: f.y1, class: 'ac-now' }));
-
-  // triângulos de inclinação 1 e 2 no canto inferior direito (uma década na horizontal)
-  const slope = (n0, v0, k) => {
-    const xa = f.X(n0), xb = f.X(n0 * 10), ya = Y(v0), yb = Y(v0 * 10 ** k);
-    plot.append(el('path', { d: `M${xa},${ya} L${xb},${ya} L${xb},${yb} Z`, class: 'ac-slope' }));
-    plot.append(el('text', { x: xb - 3, y: (ya + yb) / 2 + 3, 'text-anchor': 'end', class: 'ac-tick' }, String(k)));
-  };
-  slope(10 ** 4.7, 10 ** 1.5, 1);
-  slope(10 ** 5.95, 10 ** 1.5, 2);
-
-  for (const t of THEORY) plot.append(curvePath(f, Y, t));
-  for (const s of seriesList()) for (const p of s.pts) plot.append(marker(f.X(p.n), Y(p.ops), COLOR[s.mode], s.hollow));
-  CROSSINGS.forEach((c, i) => {
-    plot.append(el('circle', { cx: f.X(c.n), cy: Y(c.y), r: 2.4, class: 'ac-cross' }));
-    plot.append(el('text', { x: f.X(c.n) + 3, y: Y(c.y) - 3, class: 'ac-cross-label' }, String(i + 1)));
-  });
-  mainSvg.append(plot);
-}
-
-function drawRatio() {
-  const f = frame(180);
-  const Y = r => f.y0 + (1 - r / RATIO_MAX) * (f.y1 - f.y0);
-  ratioSvg.replaceChildren();
-  const axes = el('g');
-  xAxis(axes, f);
-  for (let r = 0; r <= RATIO_MAX; r += 20) {
-    axes.append(el('line', { x1: f.x0, x2: f.x1, y1: Y(r), y2: Y(r), class: 'ac-grid' }));
-    axes.append(el('text', { x: f.x0 - 3, y: Y(r) + 3, 'text-anchor': 'end', class: 'ac-tick' }, String(r)));
-  }
-  yLabel(axes, f, 'T(n)/n');
-  ratioSvg.append(axes);
-
-  const plot = clipArea(ratioSvg, f, 'acRatioClip');
-  for (const t of THEORY) plot.append(curvePath(f, Y, t, (v, n) => Math.min(v / n, RATIO_MAX * 1.05)));
-  ratioSvg.append(plot);
-
-  // Seta para cima onde uma curva ou um ponto sai pelo topo
-  const arrow = (x, color) => ratioSvg.append(el('path', {
-    d: `M${x},${f.y0 - 5} l-3.5,6 h7 Z`, fill: color,
-  }));
-  const bruteTop = THEORY.find(t => t.id === 'brute');
-  let lo = N_MIN, hi = N_MAX;   // bisseção: (n−1)/2 = RATIO_MAX
-  for (let it = 0; it < 60; it++) {
-    const mid = Math.sqrt(lo * hi);
-    if (bruteTop.f(mid) / mid < RATIO_MAX) lo = mid; else hi = mid;
-  }
-  arrow(f.X(lo), COLOR.brute);
-  ratioSvg.append(el('text', { x: f.X(lo) + 6, y: f.y0 + 9, class: 'ac-tick' }, 'n² sai pelo topo'));
-
-  for (const s of seriesList()) {
-    for (const p of s.pts) {
-      const r = p.ops / p.n;
-      if (r > RATIO_MAX) arrow(f.X(p.n), COLOR[s.mode]);
-      else ratioSvg.append(marker(f.X(p.n), Y(r), COLOR[s.mode], s.hollow));
+  for (const c of CURVES) {
+    // até a borda direita, ou até onde a curva sai pelo topo
+    let nEnd = N_MAX;
+    if (c.f(N_MAX) > Y_MAX) {
+      let lo = 0, hi = N_MAX;
+      for (let it = 0; it < 40; it++) { const mid = (lo + hi) / 2; if (c.f(mid) < Y_MAX) lo = mid; else hi = mid; }
+      nEnd = lo;
     }
+    const pts = [];
+    for (let s = 0; s <= 200; s++) {
+      const n = (nEnd * s) / 200;
+      pts.push([X(n), Y(c.f(n))]);
+    }
+    const color = COLOR[c.mode];
+    chartSvg.append(el('polyline', {
+      points: pts.map(([x, y]) => `${x.toFixed(2)},${y.toFixed(2)}`).join(' '), stroke: color, class: 'ac-curve',
+    }));
+    const [xa, ya] = pts[pts.length - 4], [xb, yb] = pts[pts.length - 1];
+    chartSvg.append(arrowHead(xb + (xb - xa) * 0.4, yb + (yb - ya) * 0.4, xb - xa, yb - ya, color, 7));
+    const top = nEnd < N_MAX;
+    chartSvg.append(el('text', {
+      x: xb + (top ? 7 : 9), y: top ? yb + 8 : yb + 4, fill: color, class: 'ac-name',
+    }, c.label));
   }
 }
-
-function fmtN(n) {
-  if (n < 1000) return n.toFixed(n < 100 ? 1 : 0).replace('.', ',');
-  const e = Math.floor(lx(n));
-  return `${(n / 10 ** e).toFixed(2).replace('.', ',')}·${pow10Label(e)}`;
-}
-
-function renderCrossings() {
-  if (!crossingsBody) return;
-  crossingsBody.replaceChildren(...CROSSINGS.map((c, i) => {
-    const tr = document.createElement('tr');
-    for (const text of [String(i + 1), `${NAME[c.a]} × ${NAME[c.b]}`, fmtN(c.n)]) {
-      const td = document.createElement('td');
-      td.textContent = text;
-      tr.append(td);
-    }
-    return tr;
-  }));
-}
-
-function measure() {
-  if (measuring || measured) return;
-  measuring = true;
-  const worker = new Worker(new URL('./bench-worker.js', import.meta.url), { type: 'module' });
-  worker.onmessage = ({ data }) => {
-    if (data.type === 'asymptotic-progress') {
-      if (chartNote) chartNote.textContent = `Contando operações: n = ${data.n.toLocaleString('pt-BR')}…`;
-    } else if (data.type === 'asymptotic-done') {
-      measured = data.ok;
-      if (chartKeyMeasured) chartKeyMeasured.hidden = false;
-      if (chartNote) chartNote.textContent = 'Contagens em cenas que respeitam as hipóteses de cada teorema, de n = 10 a 10⁵ (força bruta até 10⁴).';
-      lastN = -1;
-      worker.terminate();
-    }
-  };
-  worker.onerror = e => {
-    measuring = false;
-    if (chartNote) chartNote.textContent = 'As medições falharam; veja o console.';
-    console.error(e.message);
-  };
-  worker.postMessage({ type: 'asymptotic' });
-}
-
-renderCrossings();
 
 export function drawChart() {
-  if (!mainSvg || chartPanelEl?.classList.contains('chart-hidden')) return;
-  measure();
-  const N = state.cubes.length;
-  if (N === lastN) return;
-  lastN = N;
-  drawMain();
-  drawRatio();
+  if (drawn || !chartSvg || chartPanelEl?.classList.contains('chart-hidden')) return;
+  drawn = true;
+  drawGrowth();
 }
 
 // ====================== CUSTO POR FASE (trilho de telemetria) ======================
