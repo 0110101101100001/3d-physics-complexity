@@ -4,7 +4,6 @@
 import { state, playSound } from './physics.js';
 import { STRATEGIES, STRATEGY } from './strategies.js';
 import { fmtTime } from './dom.js';
-import { setMeasuredCurves } from './telemetry.js';
 
 let worker = null;
 let busy = false;
@@ -23,7 +22,6 @@ function startWorker() {
     } else if (data.type === 'fit-done') {
       busy = false;
       renderFit(data.series, data.fits, data.sizes);
-      setMeasuredCurves(data);
       lastFit = { ...data, cellSize: state.cellSize, octreeDepth: state.octreeDepth };
       setFitStatus(`n de ${data.sizes[0]} a ${data.sizes[data.sizes.length - 1]} · célula ${state.cellSize} · profundidade ${state.octreeDepth}`);
     }

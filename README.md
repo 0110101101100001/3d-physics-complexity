@@ -34,7 +34,7 @@ A aba Verificação roda, para cada estratégia, uma cena que respeita as hipót
 - Abrir a corrida (C): a tela se divide em quatro colunas, uma por estratégia, rodando sobre os mesmos cubos no mesmo frame.
 - Rodar o benchmark (B): mede as quatro estratégias na cena atual e em cenas sintéticas de 10 a 150 cubos, e ajusta t = a·nᵏ em escala log-log. As medições rodam num Web Worker, então a cena não trava.
 - Segurar X para o raio-X: os cubos ficam translúcidos e sobra a estrutura da estratégia ativa (células da grade, nós da Octree, régua do Sweep and Prune).
-- Acompanhar a telemetria: pares por frame, tempo médio, custo dividido entre montar a estrutura e consultar os pares, e um gráfico de crescimento que vai até N → ∞.
+- Acompanhar a telemetria: pares por frame, tempo médio, custo dividido entre montar a estrutura e consultar os pares, e um gráfico assintótico em log-log (N de 10 a 10⁷) com as curvas dos teoremas, as contagens medidas e um botão para violar as hipóteses.
 - Ajustar o tamanho da célula da grade e a profundidade da Octree, ligar a física (os cubos passam a quicar uns nos outros), arrastar cubos com o mouse e exportar o histórico da sessão em CSV.
 
 ### Cenas prontas por URL

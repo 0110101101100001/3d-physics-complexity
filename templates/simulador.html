@@ -196,14 +196,28 @@
 
     <section class="rail-section">
       <h2 class="rail-title">Crescimento por número de cubos</h2>
-      <canvas id="perfChart" width="280" height="200" role="img" aria-label="Gráfico das curvas teóricas de crescimento do tempo de detecção em função do número de cubos, para as quatro estratégias"></canvas>
+      <label class="chart-toggle"><input type="checkbox" id="chartViolate"> violar hipóteses</label>
+      <canvas id="perfChart" width="560" height="500" role="img" aria-label="Gráfico log-log do número de operações em função do número de cubos, de 10 a 10 milhões: curvas teóricas tracejadas de cada estratégia e contagens medidas"></canvas>
       <ul id="chartLegend">
         <li class="legend-item" data-mode="brute">Força bruta</li>
         <li class="legend-item" data-mode="grid">Grade</li>
         <li class="legend-item" data-mode="octree">Octree</li>
         <li class="legend-item" data-mode="sap">Sweep and prune</li>
       </ul>
-      <p class="chart-note" id="chartNote">Curvas ilustrativas até N → ∞. A faixa clara é o que o simulador alcança (até 150 cubos) e a linha vertical marca o N atual. Rode o benchmark (B) para ver os tempos medidos aqui.</p>
+      <p class="chart-key">Tracejado: teoria. Tracejado claro: curva secundária (Octree sob H<sub>D</sub>; SAP sob H2). Ponto cheio: medido. Ponto vazado: SAP medido no frame seguinte. Triângulos: inclinação 1 e 2.</p>
+      <p class="chart-note" id="chartNote">As medições começam quando o painel abre.</p>
+      <h3 class="chart-subtitle">T(n)/n</h3>
+      <canvas id="perfRatioChart" width="560" height="300" role="img" aria-label="Operações por cubo, T(n)/n, com n em escala log e eixo linear: linear vira reta horizontal, n log n reta inclinada"></canvas>
+      <p class="chart-note">Θ(n) vira reta horizontal, Θ(n log n) reta inclinada e Θ(n²) sai pelo topo.</p>
+      <h3 class="chart-subtitle">Cruzamentos das curvas teóricas</h3>
+      <ol id="chartCrossings" class="chart-crossings"></ol>
+      <h3 class="chart-subtitle">Constantes</h3>
+      <dl class="chart-constants">
+        <dt>Grade</dt><dd>c<sub>g</sub> = m·K = 64, com célula 2 ≥ s<sub>max</sub> = 1, m = 8 células por cubo, K = 8 cubos por célula</dd>
+        <dt>Octree</dt><dd>c<sub>o</sub> = 2 (vale para n ≥ 64), K = 4 por folha, D = 6</dd>
+        <dt>Sweep and Prune</dt><dd>c<sub>s</sub> = 1, k = α·n com α = 2</dd>
+      </dl>
+      <p class="chart-note">As constantes vêm das hipóteses de cada teorema e das cenas, não de um ajuste a tempos medidos. Operações = testes de par + inserções (na Octree, classificações de octante; no SAP, comparações da ordenação).</p>
     </section>
 
     <section class="rail-section">

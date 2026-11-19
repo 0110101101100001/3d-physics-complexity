@@ -165,11 +165,13 @@ input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--ink); cu
 
 /* com a simulação pausada as leituras e o gráfico perdem a cor */
 #chartStats.sim-paused,
-#chartPanel.sim-paused #perfChart { filter: saturate(0.25) brightness(0.9); }
+#chartPanel.sim-paused #perfChart,
+#chartPanel.sim-paused #perfRatioChart { filter: saturate(0.25) brightness(0.9); }
 
 /* ─── Gráfico ─── */
-#perfChart {
+#perfChart, #perfRatioChart {
   display: block;
+  width: 280px;
   max-width: 100%;
   height: auto;
   background: var(--well);
@@ -191,6 +193,14 @@ input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--ink); cu
 .legend-item[data-mode="sap"] { --key: var(--sap); }
 .legend-item::before { content: ""; width: 9px; height: 9px; border-radius: 2px; background: var(--key); }
 .chart-note { margin-top: 8px; font-size: 12px; color: var(--ink-soft); }
+.chart-key { margin-top: 8px; font-size: 11px; color: var(--ink-soft); }
+.chart-subtitle { margin: 16px 0 6px; font-family: var(--font-mono); font-size: 11px; font-weight: 500; color: var(--ink-soft); }
+.chart-toggle { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 8px; font-size: 12px; color: var(--ink); cursor: pointer; }
+.chart-toggle input { accent-color: var(--danger); }
+.chart-crossings { padding-left: 18px; font-family: var(--font-mono); font-size: 11px; color: var(--ink-soft); display: grid; gap: 2px; }
+.chart-constants { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; font-size: 11px; }
+.chart-constants dt { color: var(--ink); }
+.chart-constants dd { margin: 0; color: var(--ink-soft); }
 
 /* ─── Custo por fase ───
    Barra empilhada: o trecho hachurado é montar a estrutura, o trecho cheio é consultar

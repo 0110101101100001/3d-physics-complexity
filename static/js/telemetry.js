@@ -2,6 +2,7 @@
 import { state, RACE_MODES } from './physics.js';
 import { STRATEGIES, strategyOf } from './strategies.js';
 import { setText, fmtLiveMs } from './dom.js';
+import { THEORY, theoryCrossings, N_MIN, N_MAX } from './asymptotic.js';
 
 // ====================== DESEMPENHO ======================
 // Janela deslizante de amostras por N, com média aparada (15% em cada ponta).
@@ -84,171 +85,262 @@ export function currentAverageTime() {
 }
 
 // ====================== GRÁFICO ASSINTÓTICO ======================
-// O eixo de N vai muito além da cena (até AXIS_N cubos, com "N → ∞" na ponta) para
-// mostrar para onde cada complexidade cresce, não só o trecho que o simulador alcança.
-// O eixo y é escalado pelas estratégias mais baratas: a força bruta, quadrática, sai
-// pelo topo, que é justamente o que acontece com ela quando N cresce.
-//
-// Antes do benchmark: curvas ilustrativas (forma e uma constante plausível de cada
-// estratégia, sem unidade). Depois: tempos medidos como pontos e a forma teórica de
-// cada estratégia ancorada no último ponto medido e extrapolada até AXIS_N.
+// Log-log de N = 10 a 10⁷ contra o número de operações (testes de par + inserções), a
+// grandeza que os teoremas da "Prova de complexidade" limitam. Tracejado: as fórmulas
+// dos teoremas com as constantes declaradas em asymptotic.js. Marcadores: contagens
+// feitas no worker, nas mesmas estruturas da simulação. Abaixo, T(n)/n com n em escala
+// log e eixo y linear: Θ(n) vira reta horizontal e Θ(n log n), reta inclinada.
 const chartCanvas = document.getElementById('perfChart');
-const chartCtx = chartCanvas ? chartCanvas.getContext('2d') : null;
+const ratioCanvas = document.getElementById('perfRatioChart');
 const chartNote = document.getElementById('chartNote');
+const crossingsList = document.getElementById('chartCrossings');
+const violateToggle = document.getElementById('chartViolate');
+const chartPanelEl = document.getElementById('chartPanel');
 
-const AXIS_N = 1000;      // ponta do eixo de N
-const Y_HEADROOM = 1.8;   // o topo fica em 1,8x a curva mais alta, fora a força bruta
-const CURVE_STEPS = 80;
-
-// Forma de cada complexidade em função de n (a escala vem do ponto medido)
-const THEORY_SHAPE = {
-  brute: n => n * n,
-  grid: n => n,
-  octree: n => n * Math.log(n),
-  sap: n => n,
+const COLOR = Object.fromEntries(STRATEGIES.map(st => [st.key, st.color]));
+const NAME = {
+  brute: 'força bruta', grid: 'grade', octree: 'octree n log n', octreeD: 'octree n·D',
+  sap: 'SAP n log n + k', sapH2: 'SAP n + k (H2)',
 };
+const CROSSINGS = theoryCrossings();
+const SCALE = 2;          // resolução interna 2x da área em CSS
+const FONT = '9px "IBM Plex Mono", monospace';
+const INK = 'rgba(255,255,255,0.55)';
+const RATIO_MAX = 70;     // topo do gráfico T(n)/n
 
-// Curvas ilustrativas: custo fixo de montar a estrutura + constante x forma. Com N
-// pequeno o custo fixo pesa e a força bruta ganha; as curvas se cruzam cedo.
-const ILLUSTRATIVE = {
-  brute: n => n * n,
-  grid: n => 2000 + 60 * n,
-  octree: n => 1500 + 12 * n * Math.log(Math.max(n, 1)),
-  sap: n => 800 + 35 * n,
-};
+let measuredOk = null;
+let measuredBad = null;
+let measuring = false;
+let dirty = true;
+let lastN = -1;
 
-let measured = null; // { series, sizes, params } do último benchmark
+function lx(n) { return Math.log10(n); }
 
-export function setMeasuredCurves({ series, sizes }) {
-  measured = { series, sizes, params: `célula ${state.cellSize}, profundidade ${state.octreeDepth}` };
-  if (chartNote) {
-    const nMax = sizes[sizes.length - 1];
-    chartNote.textContent = `Pontos: tempos medidos no último benchmark, até n = ${nMax} (${measured.params}). ` +
-      `Tracejado: forma teórica ancorada em n = ${nMax} e extrapolada até ${AXIS_N.toLocaleString('pt-BR')}.`;
-  }
-}
-
-function fmtAxisMs(ms) {
-  if (ms >= 1) return `${ms.toFixed(1)} ms`;
-  if (ms >= 0.01) return `${ms.toFixed(2)} ms`;
-  return `${ms.toFixed(3)} ms`;
-}
-
-export function drawChart() {
-  if (!chartCtx) return;
-  const ctx = chartCtx;
-  const w = chartCanvas.width;
-  const h = chartCanvas.height;
+function setupCanvas(canvas) {
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width / SCALE, h = canvas.height / SCALE;
+  ctx.setTransform(SCALE, 0, 0, SCALE, 0, 0);
   ctx.clearRect(0, 0, w, h);
+  ctx.font = FONT;
+  return { ctx, w, h };
+}
 
-  const padX = 40;
-  const padY = 38;
-  const chartW = w - padX - 10;
-  const chartH = h - padY - 10;
-  const baseY = h - padY;
-  const xOf = n => padX + (n / AXIS_N) * chartW;
+function pow10Label(e) {
+  const sup = { '-': '⁻', 0: '⁰', 1: '¹', 2: '²', 3: '³', 4: '⁴', 5: '⁵', 6: '⁶', 7: '⁷', 8: '⁸', 9: '⁹' };
+  return '10' + String(e).split('').map(ch => sup[ch]).join('');
+}
 
-  // Curvas: f(n) em unidades de y; o topo é 1,8x o maior valor em AXIS_N fora a força bruta
-  const curves = {};
-  const dots = {};
-  if (measured) {
-    const { series, sizes } = measured;
-    const nMax = sizes[sizes.length - 1];
-    for (const st of STRATEGIES) {
-      const pts = series[st.key];
-      const last = pts[pts.length - 1];
-      dots[st.key] = pts;
-      if (last && last.t > 0) {
-        const c = last.t / THEORY_SHAPE[st.key](nMax);
-        curves[st.key] = n => c * THEORY_SHAPE[st.key](n);
-      }
-    }
-  } else {
-    Object.assign(curves, ILLUSTRATIVE);
-  }
-  const atEnd = STRATEGIES.filter(st => st.key !== 'brute' && curves[st.key]).map(st => curves[st.key](AXIS_N));
-  const yMax = (atEnd.length ? Math.max(...atEnd) : 1) * Y_HEADROOM || 1;
-  const yOf = v => baseY - (v / yMax) * chartH;
-
-  // Eixos
+// Curva tracejada amostrada em log n, recortada à área do gráfico
+function strokeCurve(ctx, f, X, Y, theory) {
   ctx.save();
-  ctx.setLineDash([4, 2]);
-  ctx.strokeStyle = 'rgba(255,255,255,0.3)';
-  ctx.lineWidth = 1;
+  ctx.strokeStyle = COLOR[theory.mode];
+  ctx.globalAlpha = theory.light ? 0.5 : 1;
+  ctx.setLineDash(theory.light ? [2, 3] : [5, 3]);
+  ctx.lineWidth = 1.3;
   ctx.beginPath();
-  ctx.moveTo(padX, baseY); ctx.lineTo(w - 10, baseY);
-  ctx.moveTo(padX, 10);    ctx.lineTo(padX, baseY);
+  const steps = 120;
+  for (let s = 0; s <= steps; s++) {
+    const n = 10 ** (lx(N_MIN) + ((lx(N_MAX) - lx(N_MIN)) * s) / steps);
+    const x = X(n), y = Y(f(n), n);
+    if (s === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  }
   ctx.stroke();
   ctx.restore();
+}
 
-  ctx.fillStyle = 'rgba(255,255,255,0.6)';
-  ctx.font = '10px "IBM Plex Mono", monospace';
+// Marcador: cheio = medido; vazado = medido no frame seguinte, sob H2
+function marker(ctx, x, y, color, hollow) {
+  ctx.beginPath();
+  ctx.arc(x, y, 2.6, 0, Math.PI * 2);
+  if (hollow) { ctx.strokeStyle = color; ctx.lineWidth = 1.2; ctx.stroke(); }
+  else { ctx.fillStyle = color; ctx.fill(); }
+}
+
+// Séries de marcadores do regime ativo: [{ mode, hollow, pts: [{n, ops}] }]
+function activeSeries() {
+  const data = violateToggle?.checked ? measuredBad : measuredOk;
+  if (!data) return [];
+  return [
+    { mode: 'brute', pts: data.brute },
+    { mode: 'grid', pts: data.grid },
+    { mode: 'octree', pts: data.octree },
+    { mode: 'sap', pts: data.sap },
+    { mode: 'sap', hollow: true, pts: data.sapH2 ?? [] },
+  ];
+}
+
+function drawMain() {
+  const { ctx, w, h } = setupCanvas(chartCanvas);
+  const ml = 40, mr = 6, mt = 8, mb = 22;
+  const yLo = 1, yHi = 14;   // 10¹ a 10¹⁴ operações
+  const X = n => ml + ((lx(n) - lx(N_MIN)) / (lx(N_MAX) - lx(N_MIN))) * (w - ml - mr);
+  const Y = v => mt + (1 - (Math.log10(Math.max(v, 1e-9)) - yLo) / (yHi - yLo)) * (h - mt - mb);
+
+  // grade e marcas: x em toda potência de 10, y a cada duas
+  ctx.fillStyle = INK;
+  ctx.strokeStyle = 'rgba(255,255,255,0.07)';
+  ctx.lineWidth = 1;
+  for (let e = 1; e <= 7; e++) {
+    ctx.beginPath(); ctx.moveTo(X(10 ** e), mt); ctx.lineTo(X(10 ** e), h - mb); ctx.stroke();
+    ctx.textAlign = 'center';
+    ctx.fillText(pow10Label(e), X(10 ** e), h - mb + 11);
+  }
+  for (let e = yLo; e <= yHi; e++) {
+    ctx.beginPath(); ctx.moveTo(ml, Y(10 ** e)); ctx.lineTo(w - mr, Y(10 ** e)); ctx.stroke();
+    if (e % 2 === 0) { ctx.textAlign = 'right'; ctx.fillText(pow10Label(e), ml - 4, Y(10 ** e) + 3); }
+  }
   ctx.textAlign = 'center';
-  ctx.fillText('N cubos', padX + chartW / 2, h - 5);
+  ctx.fillText('N cubos', ml + (w - ml - mr) / 2, h - 2);
   ctx.save();
-  ctx.translate(12, 10 + chartH / 2);
+  ctx.translate(7, mt + (h - mt - mb) / 2);
   ctx.rotate(-Math.PI / 2);
-  ctx.fillText(measured ? 'Tempo (ms)' : 'Tempo', 0, 0);
+  ctx.fillText('operações', 0, 0);
   ctx.restore();
 
-  // Marcas do eixo de N: 0, o limite do simulador e a ponta "N → ∞"
-  const limitN = measured ? measured.sizes[measured.sizes.length - 1] : 150;
-  ctx.fillStyle = 'rgba(255,255,255,0.5)';
-  ctx.textAlign = 'left';
-  ctx.fillText('0', padX - 2, baseY + 12);
-  ctx.textAlign = 'center';
-  ctx.fillText(String(limitN), xOf(limitN), baseY + 12);
-  ctx.textAlign = 'right';
-  ctx.fillText('N → ∞', w - 10, baseY + 12);
-  if (measured) {
-    ctx.textAlign = 'left';
-    ctx.fillText(fmtAxisMs(yMax), padX + 4, 16);
-  }
-
-  // Recorta tudo à área do gráfico para nada vazar sobre eixos e rótulos
   ctx.save();
   ctx.beginPath();
-  ctx.rect(padX, 6, w - padX - 6, h - padY - 6 + 4);
+  ctx.rect(ml, mt, w - ml - mr, h - mt - mb);
   ctx.clip();
 
-  // Faixa que o simulador alcança (até 150 cubos)
-  ctx.fillStyle = 'rgba(255,255,255,0.045)';
-  ctx.fillRect(padX, 10, xOf(limitN) - padX, baseY - 10);
-
-  // Curvas tracejadas, de 1 até AXIS_N
-  for (const st of STRATEGIES) {
-    const f = curves[st.key];
-    if (!f) continue;
-    ctx.save();
-    ctx.setLineDash([4, 2]);
-    ctx.strokeStyle = st.color;
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    for (let s = 0; s <= CURVE_STEPS; s++) {
-      const n = Math.max(1, (s / CURVE_STEPS) * AXIS_N);
-      const y = Math.max(yOf(f(n)), -10); // acima do topo só precisa sair da área
-      if (s === 0) ctx.moveTo(xOf(n), y); else ctx.lineTo(xOf(n), y);
-    }
-    ctx.stroke();
-    ctx.restore();
-  }
-
-  // Pontos medidos
-  for (const st of STRATEGIES) {
-    ctx.fillStyle = st.color;
-    for (const p of dots[st.key] ?? []) ctx.fillRect(xOf(p.n) - 1.5, yOf(p.t) - 1.5, 3, 3);
-  }
-
-  // N atual
+  // N atual da cena
   const N = Math.max(state.cubes.length, 2);
-  ctx.setLineDash([3, 3]);
-  ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+  ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+  ctx.setLineDash([2, 3]);
+  ctx.beginPath(); ctx.moveTo(X(N), mt); ctx.lineTo(X(N), h - mb); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // triângulos de inclinação 1 e 2 (uma década na horizontal)
+  const slope = (n0, v0, k) => {
+    const x0 = X(n0), x1 = X(n0 * 10), y0 = Y(v0), y1 = Y(v0 * 10 ** k);
+    ctx.strokeStyle = 'rgba(255,255,255,0.45)';
+    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y0); ctx.lineTo(x1, y1); ctx.closePath(); ctx.stroke();
+    ctx.fillStyle = INK;
+    ctx.textAlign = 'left';
+    ctx.fillText(String(k), x1 + 3, (y0 + y1) / 2 + 3);
+  };
+  slope(10 ** 4.3, 10 ** 1.4, 1);
+  slope(10 ** 5.6, 10 ** 1.4, 2);
+
+  for (const t of THEORY) strokeCurve(ctx, t.f, X, v => Y(v), t);
+  for (const s of activeSeries()) {
+    for (const p of s.pts) marker(ctx, X(p.n), Y(p.ops), COLOR[s.mode], s.hollow);
+  }
+  // cruzamentos numerados
+  CROSSINGS.forEach((c, i) => {
+    const x = X(c.n), y = Y(c.y);
+    ctx.fillStyle = '#e4e4e7';
+    ctx.beginPath(); ctx.arc(x, y, 2.2, 0, Math.PI * 2); ctx.fill();
+    ctx.textAlign = 'left';
+    ctx.fillText(String(i + 1), x + 3, y - 3);
+  });
+  ctx.restore();
+}
+
+function drawRatio() {
+  if (!ratioCanvas) return;
+  const { ctx, w, h } = setupCanvas(ratioCanvas);
+  const ml = 40, mr = 6, mt = 8, mb = 22;
+  const X = n => ml + ((lx(n) - lx(N_MIN)) / (lx(N_MAX) - lx(N_MIN))) * (w - ml - mr);
+  const Y = r => mt + (1 - Math.min(r, RATIO_MAX * 1.2) / RATIO_MAX) * (h - mt - mb);
+
+  ctx.fillStyle = INK;
+  ctx.strokeStyle = 'rgba(255,255,255,0.07)';
   ctx.lineWidth = 1;
+  for (let e = 1; e <= 7; e++) {
+    ctx.beginPath(); ctx.moveTo(X(10 ** e), mt); ctx.lineTo(X(10 ** e), h - mb); ctx.stroke();
+    ctx.textAlign = 'center';
+    ctx.fillText(pow10Label(e), X(10 ** e), h - mb + 11);
+  }
+  for (let r = 0; r <= RATIO_MAX; r += 20) {
+    ctx.beginPath(); ctx.moveTo(ml, Y(r)); ctx.lineTo(w - mr, Y(r)); ctx.stroke();
+    ctx.textAlign = 'right';
+    ctx.fillText(String(r), ml - 4, Y(r) + 3);
+  }
+  ctx.textAlign = 'center';
+  ctx.fillText('N cubos', ml + (w - ml - mr) / 2, h - 2);
+  ctx.save();
+  ctx.translate(7, mt + (h - mt - mb) / 2);
+  ctx.rotate(-Math.PI / 2);
+  ctx.fillText('T(n)/n', 0, 0);
+  ctx.restore();
+
+  ctx.save();
   ctx.beginPath();
-  ctx.moveTo(xOf(N), baseY);
-  ctx.lineTo(xOf(N), 10);
-  ctx.stroke();
-  ctx.restore(); // fim do recorte da área do gráfico
+  ctx.rect(ml, mt, w - ml - mr, h - mt - mb);
+  ctx.clip();
+  for (const t of THEORY) strokeCurve(ctx, t.f, X, (v, n) => Y(v / n), t);
+  for (const s of activeSeries()) {
+    for (const p of s.pts) {
+      const r = p.ops / p.n;
+      if (r > RATIO_MAX) {
+        // acima do topo: seta para cima na borda
+        const x = X(p.n);
+        ctx.fillStyle = COLOR[s.mode];
+        ctx.beginPath(); ctx.moveTo(x, mt + 1); ctx.lineTo(x - 3, mt + 6); ctx.lineTo(x + 3, mt + 6); ctx.fill();
+      } else {
+        marker(ctx, X(p.n), Y(r), COLOR[s.mode], s.hollow);
+      }
+    }
+  }
+  ctx.restore();
+}
+
+function fmtN(n) {
+  if (n < 1000) return n.toFixed(n < 100 ? 1 : 0).replace('.', ',');
+  const e = Math.floor(Math.log10(n));
+  return `${(n / 10 ** e).toFixed(1).replace('.', ',')}·${pow10Label(e)}`;
+}
+
+function renderCrossings() {
+  if (!crossingsList) return;
+  crossingsList.replaceChildren(...CROSSINGS.map(c => {
+    const li = document.createElement('li');
+    li.textContent = `${NAME[c.a]} × ${NAME[c.b]}: n ≈ ${fmtN(c.n)}`;
+    return li;
+  }));
+}
+
+function measure() {
+  if (measuring || measuredOk) return;
+  measuring = true;
+  const worker = new Worker(new URL('./bench-worker.js', import.meta.url), { type: 'module' });
+  worker.onmessage = ({ data }) => {
+    if (data.type === 'asymptotic-progress') {
+      if (chartNote) chartNote.textContent = `Medindo ${data.violate ? 'os contraexemplos' : 'as cenas'}: n = ${data.n.toLocaleString('pt-BR')}…`;
+    } else if (data.type === 'asymptotic-done') {
+      measuredOk = data.ok;
+      measuredBad = data.violate;
+      updateNote();
+      dirty = true;
+      worker.terminate();
+    }
+  };
+  worker.onerror = e => {
+    if (chartNote) chartNote.textContent = 'As medições falharam; veja o console.';
+    console.error(e.message);
+  };
+  worker.postMessage({ type: 'asymptotic' });
+}
+
+function updateNote() {
+  if (!chartNote || !measuredOk) return;
+  chartNote.textContent = violateToggle?.checked
+    ? 'Contraexemplos: todos numa célula (grade), agrupados num ponto com D = 6 (octree), todos com o mesmo x (SAP). As medições sobem para a curva n(n−1)/2.'
+    : 'Cenas que respeitam as hipóteses de cada teorema, de n = 10 a 10⁵ (força bruta até 10⁴). O círculo vazado é o Sweep and Prune no frame seguinte, sob H2.';
+}
+
+violateToggle?.addEventListener('change', () => { updateNote(); dirty = true; });
+renderCrossings();
+
+export function drawChart() {
+  if (!chartCanvas || chartPanelEl?.classList.contains('chart-hidden')) return;
+  measure();
+  const N = state.cubes.length;
+  if (!dirty && N === lastN) return;
+  dirty = false;
+  lastN = N;
+  drawMain();
+  drawRatio();
 }
 
 // ====================== CUSTO POR FASE (trilho de telemetria) ======================
