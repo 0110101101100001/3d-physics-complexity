@@ -1,14 +1,18 @@
 // --- physics.js — Lógica de física, deteção de colisão e estado da simulação ---
 // Sem dependências de UI. A UI (ui.js) chama as funções e trata o DOM.
-// Three.js é carregado globalmente via CDN (window.THREE) pelo index.html.
+// Os algoritmos de broad-phase ficam em broadphase.js (sem Three.js, testáveis no Node).
 
-const THREE = window.THREE;
+import * as THREE from 'three';
 import * as setup from './three-setup.js';
 import { fragmentMesh, spawnFragments, updateFragments, clearFragments } from './fragments.js';
+import {
+  ARENA_HALF_XZ, ARENA_HEIGHT, ARENA_BOUNDS, MODES, SpatialGrid, OctreeSimulator, SweepAndPrune,
+  intersectAABB, pairKey, updateAABB, runBroadPhase,
+} from './broadphase.js';
+import { STRATEGY, strategyOf } from './strategies.js';
 
 // Limites da caixa de confinamento (ver cageMesh em three-setup.js)
-export const ARENA_HALF_XZ = 20;
-export const ARENA_HEIGHT = 20;
+export { ARENA_HALF_XZ, ARENA_HEIGHT };
 
 // Limites aceitos pelos controles (espelham os atributos min/max do index.html)
 export const LIMITS = {
@@ -44,259 +48,18 @@ export const state = {
   lastExecutionTime: 0,
   spatialGrid: null,
   octreeSimulator: null,
+  sweepAndPrune: null,
   currentBroadPhase: 'brute',
-  raceMode: false, // corrida: as três estratégias rodam no mesmo frame, uma por coluna
+  raceMode: false, // corrida: todas as estratégias rodam no mesmo frame, uma por coluna
   cellSize: 2,
   octreeDepth: 6,
 };
 
-export const CONTEXT_CONFIG = {
-  brute: {
-    algorithm: "AABB — Axis-Aligned Bounding Box",
-    worstCase: "O(n²) — verificação por força bruta",
-    op: "Sobreposição nos eixos X, Y e Z"
-  },
-  grid: {
-    algorithm: "Grade Espacial Uniforme 3D",
-    worstCase: "O(n²) no pior caso / O(n) no caso médio",
-    op: "Hashing espacial e teste entre células vizinhas"
-  },
-  octree: {
-    algorithm: "Octree 3D — Subdivisão Recursiva",
-    worstCase: "O(n²) no pior caso / O(n log n) no caso médio",
-    op: "Travessia de 8 octantes e teste de nós com entidades"
-  }
-};
-
 export function updateContextPanel(mode) {
-  const config = CONTEXT_CONFIG[mode] ?? CONTEXT_CONFIG.brute;
+  const config = strategyOf(mode).context;
   document.getElementById('context-algorithm').textContent = config.algorithm;
   document.getElementById('context-worstcase').textContent = config.worstCase;
   document.getElementById('context-op').textContent = config.op;
-}
-
-// Atualiza a AABB (THREE.Box3) armazenada no cubo a partir da posição atual
-function updateAABB(cube) {
-  const h = cube.size / 2;
-  const p = cube.mesh.position;
-  cube.aabb.min.set(p.x - h, p.y - h, p.z - h);
-  cube.aabb.max.set(p.x + h, p.y + h, p.z + h);
-}
-
-// Chave numérica única por par (evita concatenação e parsing de strings)
-function pairKey(a, b) {
-  return a.id < b.id ? a.id * 1e6 + b.id : b.id * 1e6 + a.id;
-}
-
-// ====================== GRADE ESPACIAL O(n) ======================
-// Chaves de célula numéricas: índices deslocados para valores positivos e empacotados.
-const CELL_OFFSET = 512;
-const CELL_RANGE = 1024;
-
-export class SpatialGrid {
-  constructor(cellSize = 2) {
-    this.cellSize = cellSize;
-    this.grid = new Map();
-    this._seenPairs = new Set();
-  }
-
-  static cellKey(x, y, z) {
-    return ((x + CELL_OFFSET) * CELL_RANGE + (y + CELL_OFFSET)) * CELL_RANGE + (z + CELL_OFFSET);
-  }
-
-  static decodeKey(key) {
-    const z = (key % CELL_RANGE) - CELL_OFFSET;
-    const rest = Math.floor(key / CELL_RANGE);
-    const y = (rest % CELL_RANGE) - CELL_OFFSET;
-    const x = Math.floor(rest / CELL_RANGE) - CELL_OFFSET;
-    return [x, y, z];
-  }
-
-  clear() { this.grid.clear(); }
-
-  insert(obj) {
-    const cs = this.cellSize;
-    const { min, max } = obj.aabb;
-    const minX = Math.floor(min.x / cs), maxX = Math.floor(max.x / cs);
-    const minY = Math.floor(min.y / cs), maxY = Math.floor(max.y / cs);
-    const minZ = Math.floor(min.z / cs), maxZ = Math.floor(max.z / cs);
-
-    for (let x = minX; x <= maxX; x++) {
-      for (let y = minY; y <= maxY; y++) {
-        for (let z = minZ; z <= maxZ; z++) {
-          const key = SpatialGrid.cellKey(x, y, z);
-          let cell = this.grid.get(key);
-          if (!cell) { cell = []; this.grid.set(key, cell); }
-          cell.push(obj);
-        }
-      }
-    }
-  }
-
-  // Visita cada par que partilha pelo menos uma célula exatamente uma vez.
-  forEachCandidatePair(onPair) {
-    const seen = this._seenPairs;
-    seen.clear();
-    for (const cell of this.grid.values()) {
-      for (let i = 0; i < cell.length; i++) {
-        const a = cell[i];
-        for (let j = i + 1; j < cell.length; j++) {
-          const b = cell[j];
-          const key = pairKey(a, b);
-          if (seen.has(key)) continue;
-          seen.add(key);
-          onPair(a, b);
-        }
-      }
-    }
-  }
-}
-
-// ====================== OCTREE O(n log n) ======================
-// Cada objeto fica no nó mais profundo que o contém por inteiro; objetos que
-// atravessam um plano divisor (straddling) permanecem no nó pai.
-export class OctreeSimulator {
-  constructor(boundsSize = 60, maxDepth = 6, maxObjectsPerNode = 4) {
-    this.boundsSize = boundsSize;
-    this.maxDepth = maxDepth;
-    this.maxObjects = maxObjectsPerNode;
-    this.clear();
-  }
-
-  _createNode(min, max, depth) {
-    const bounds = new THREE.Box3(min, max);
-    const center = new THREE.Vector3().addVectors(min, max).multiplyScalar(0.5);
-    return { bounds, center, depth, children: null, objects: [] };
-  }
-
-  clear() {
-    const h = this.boundsSize / 2;
-    this.root = this._createNode(new THREE.Vector3(-h, -h, -h), new THREE.Vector3(h, h, h), 0);
-  }
-
-  // Índice do filho: bit0 = metade alta em X, bit1 = Y, bit2 = Z
-  _subdivide(node) {
-    const { min, max } = node.bounds;
-    const c = node.center;
-    const d = node.depth + 1;
-    node.children = new Array(8);
-    for (let i = 0; i < 8; i++) {
-      const lo = new THREE.Vector3(i & 1 ? c.x : min.x, i & 2 ? c.y : min.y, i & 4 ? c.z : min.z);
-      const hi = new THREE.Vector3(i & 1 ? max.x : c.x, i & 2 ? max.y : c.y, i & 4 ? max.z : c.z);
-      node.children[i] = this._createNode(lo, hi, d);
-    }
-  }
-
-  // Filho que contém a caixa por inteiro, ou null se ela atravessa o centro.
-  _childContaining(node, box) {
-    const c = node.center;
-    let idx = 0;
-    if (box.min.x >= c.x) idx |= 1; else if (box.max.x > c.x) return null;
-    if (box.min.y >= c.y) idx |= 2; else if (box.max.y > c.y) return null;
-    if (box.min.z >= c.z) idx |= 4; else if (box.max.z > c.z) return null;
-    return node.children[idx];
-  }
-
-  insert(obj) { this._insertNode(this.root, obj); }
-
-  _insertNode(node, obj) {
-    if (node.children) {
-      const child = this._childContaining(node, obj.aabb);
-      if (child) { this._insertNode(child, obj); return; }
-      node.objects.push(obj);
-      return;
-    }
-    node.objects.push(obj);
-    if (node.objects.length > this.maxObjects && node.depth < this.maxDepth) {
-      this._subdivide(node);
-      const kept = [];
-      for (const o of node.objects) {
-        const child = this._childContaining(node, o.aabb);
-        if (child) this._insertNode(child, o);
-        else kept.push(o);
-      }
-      node.objects = kept;
-    }
-  }
-
-  // Visita cada par candidato uma única vez: objetos do mesmo nó entre si e
-  // objetos de ancestrais contra os do nó, só quando a AABB do ancestral
-  // intersecta os limites do nó.
-  forEachCandidatePair(onPair) {
-    this._collectPairs(this.root, [], onPair);
-  }
-
-  _collectPairs(node, inherited, onPair) {
-    const objs = node.objects;
-    for (let i = 0; i < objs.length; i++) {
-      const a = objs[i];
-      for (let j = i + 1; j < objs.length; j++) onPair(a, objs[j]);
-      for (let k = 0; k < inherited.length; k++) onPair(inherited[k], a);
-    }
-    if (!node.children) return;
-    const carry = objs.length ? inherited.concat(objs) : inherited;
-    for (let i = 0; i < 8; i++) {
-      const child = node.children[i];
-      if (!child.children && child.objects.length === 0) continue;
-      const pass = [];
-      for (let k = 0; k < carry.length; k++) {
-        if (carry[k].aabb.intersectsBox(child.bounds)) pass.push(carry[k]);
-      }
-      this._collectPairs(child, pass, onPair);
-    }
-  }
-}
-
-// ====================== AABB ======================
-export function intersectAABB(a, b) {
-  const s = (a.size + b.size) / 2;
-  const pa = a.mesh.position, pb = b.mesh.position;
-  return Math.abs(pa.x - pb.x) < s &&
-         Math.abs(pa.y - pb.y) < s &&
-         Math.abs(pa.z - pb.z) < s;
-}
-
-// ====================== BROAD-PHASE ======================
-// Duas fases, medidas em separado:
-//   1. montar    — limpa e preenche a estrutura espacial (a força bruta não tem esta fase)
-//   2. consultar — percorre a estrutura e chama onPair(a, b) para cada par candidato
-// Simulação, corrida e benchmark usam estas mesmas funções, para medirem o mesmo trabalho.
-export function buildBroadPhase(mode, cubes, structures = {}) {
-  if (mode === 'grid') {
-    const grid = structures.grid;
-    grid.clear();
-    for (let i = 0; i < cubes.length; i++) grid.insert(cubes[i]);
-  } else if (mode === 'octree') {
-    const octree = structures.octree;
-    octree.clear();
-    for (let i = 0; i < cubes.length; i++) octree.insert(cubes[i]);
-  }
-}
-
-export function queryBroadPhase(mode, cubes, onPair, structures = {}) {
-  if (mode === 'grid') {
-    structures.grid.forEachCandidatePair(onPair);
-  } else if (mode === 'octree') {
-    structures.octree.forEachCandidatePair(onPair);
-  } else {
-    for (let i = 0; i < cubes.length; i++) {
-      const a = cubes[i];
-      for (let j = i + 1; j < cubes.length; j++) onPair(a, cubes[j]);
-    }
-  }
-}
-
-// Monta e consulta, devolvendo o tempo de cada fase em ms.
-export function runBroadPhase(mode, cubes, onPair, structures = {}) {
-  const t0 = performance.now();
-  let t1 = t0;
-  if (mode !== 'brute') {
-    buildBroadPhase(mode, cubes, structures);
-    t1 = performance.now();
-  }
-  queryBroadPhase(mode, cubes, onPair, structures);
-  const t2 = performance.now();
-  return { buildMs: t1 - t0, queryMs: t2 - t1, totalMs: t2 - t0 };
 }
 
 // Garante que as estruturas dos modos pedidos existem e refletem os parâmetros do estado
@@ -306,20 +69,21 @@ function ensureStructures(modes) {
     state.spatialGrid.cellSize = state.cellSize;
   }
   if (modes.includes('octree')) {
-    if (!state.octreeSimulator) state.octreeSimulator = new OctreeSimulator(60, state.octreeDepth);
+    if (!state.octreeSimulator) state.octreeSimulator = new OctreeSimulator(undefined, state.octreeDepth);
     state.octreeSimulator.maxDepth = state.octreeDepth;
   }
+  if (modes.includes('sap') && !state.sweepAndPrune) state.sweepAndPrune = new SweepAndPrune();
 }
 
 // Estratégias na ordem das colunas da corrida
-export const RACE_MODES = ['brute', 'grid', 'octree'];
+export const RACE_MODES = MODES;
 
 // Resultado do último frame por estratégia. `ran` diz se ela rodou neste frame:
 // fora da corrida só a estratégia ativa roda.
 const newFrameStats = () => ({
   ran: false, comparisons: 0, buildMs: 0, queryMs: 0, timeMs: 0, tested: [], hits: [],
 });
-export const frameStats = { brute: newFrameStats(), grid: newFrameStats(), octree: newFrameStats() };
+export const frameStats = Object.fromEntries(MODES.map(mode => [mode, newFrameStats()]));
 
 function modesThisFrame() {
   return state.raceMode ? RACE_MODES : [state.currentBroadPhase];
@@ -411,11 +175,20 @@ export function createCube(spawnIndex = 0) {
   const solidMaterial = new THREE.MeshStandardMaterial({
     color: baseCol.clone(), roughness: 0.9, flatShading: true
   });
+  // Wireframe: a malha continua na cena (para o arraste acertar o cubo) com um material
+  // que não desenha nada, e as 12 arestas aparecem por cima. O material invisível guarda
+  // a cor do cubo; syncEdgeColors a copia para as arestas.
   const wireframeMaterial = new THREE.MeshBasicMaterial({
-    color: baseCol.clone(), wireframe: true
+    color: baseCol.clone(), colorWrite: false, depthWrite: false
   });
+  const edgeMaterial = new THREE.LineBasicMaterial({ color: baseCol.clone(), transparent: true });
+  const edgeGeometry = new THREE.EdgesGeometry(geometry);
+  const edges = new THREE.LineSegments(edgeGeometry, edgeMaterial);
+  edges.visible = state.wireframeEnabled;
+  edges.raycast = () => {}; // o raio acerta a malha, não as arestas
   const mesh = new THREE.Mesh(geometry, state.wireframeEnabled ? wireframeMaterial : solidMaterial);
-  mesh.castShadow = true;
+  mesh.add(edges);
+  mesh.castShadow = !state.wireframeEnabled;
   mesh.receiveShadow = true;
   // Nasce sempre dentro da caixa de confinamento
   const spanXZ = 2 * (ARENA_HALF_XZ - half);
@@ -435,7 +208,7 @@ export function createCube(spawnIndex = 0) {
     mesh, arrow: arrowHelper, id: state.nextId++, size, velocity,
     aabb: new THREE.Box3(),
     dragging: false, colliding: false, baseColor: baseCol.clone(), paletteIndex,
-    geometry, solidMaterial, wireframeMaterial,
+    geometry, solidMaterial, wireframeMaterial, edges, edgeGeometry, edgeMaterial,
     spawnScale: -Math.min(spawnIndex * 0.08, 1.5), spawnDone: false
   };
   updateAABB(cubeData);
@@ -443,27 +216,6 @@ export function createCube(spawnIndex = 0) {
   mesh.scale.setScalar(0.001);
   state.cubes.push(cubeData);
   setup.scene.add(mesh);
-}
-
-// Cubos sem malha, com a mesma distribuição de createCube (tamanho 2 a 6, dentro da
-// arena). Servem ao ajuste empírico da curva, que mede cenas de vários N sem tocar
-// na cena visível. `rand` é um gerador em [0, 1) (com semente, para repetir a cena).
-export function createSyntheticCubes(n, rand) {
-  const list = [];
-  for (let i = 0; i < n; i++) {
-    const size = rand() * 4 + 2;
-    const half = size / 2;
-    const spanXZ = 2 * (ARENA_HALF_XZ - half);
-    const position = new THREE.Vector3(
-      (rand() - 0.5) * spanXZ,
-      half + rand() * (ARENA_HEIGHT - size),
-      (rand() - 0.5) * spanXZ
-    );
-    const cube = { id: i, size, mesh: { position }, aabb: new THREE.Box3() };
-    updateAABB(cube);
-    list.push(cube);
-  }
-  return list;
 }
 
 function disposeCube(c) {
@@ -476,6 +228,8 @@ function disposeCube(c) {
   c.geometry.dispose();
   c.solidMaterial.dispose();
   c.wireframeMaterial.dispose();
+  c.edgeGeometry.dispose();
+  c.edgeMaterial.dispose();
 }
 
 export function initCubes() {
@@ -491,6 +245,7 @@ export function initCubes() {
 
   state.spatialGrid = null;
   state.octreeSimulator = null;
+  state.sweepAndPrune = null;
   ensureStructures(modesThisFrame());
 
   const input = document.getElementById('cubeCountInput');
@@ -512,6 +267,7 @@ export function switchStrategy(mode) {
   state.collisionCount = 0; // pares que já estavam em colisão não contam de novo
   state.spatialGrid = null;
   state.octreeSimulator = null;
+  state.sweepAndPrune = null;
   ensureStructures(modesThisFrame());
 
   const palette = setup.CUBE_PALETTES[mode] || setup.CUBE_PALETTES.brute;
@@ -549,11 +305,21 @@ export function updateDebris(delta) {
 }
 
 export function toggleWireframe() {
+  const wire = state.wireframeEnabled;
   state.cubes.forEach(cube => {
-    const target = state.wireframeEnabled ? cube.wireframeMaterial : cube.solidMaterial;
+    const target = wire ? cube.wireframeMaterial : cube.solidMaterial;
     target.color.copy(cube.mesh.material.color);
     cube.mesh.material = target;
+    cube.edges.visible = wire;
+    cube.mesh.castShadow = !wire && setup.xray.level === 0;
   });
+  syncEdgeColors();
+}
+
+// No wireframe a cor do cubo vive no material invisível da malha: as arestas a copiam
+function syncEdgeColors() {
+  if (!state.wireframeEnabled) return;
+  for (const c of state.cubes) c.edgeMaterial.color.copy(c.mesh.material.color);
 }
 
 // ====================== FÍSICA (atualização de posições) ======================
@@ -611,11 +377,11 @@ export function detectCollisions() {
     updateAABB(c);
     if (!c.dragging) _activeCubes.push(c);
   }
-  const structures = { grid: state.spatialGrid, octree: state.octreeSimulator };
+  const structures = { grid: state.spatialGrid, octree: state.octreeSimulator, sap: state.sweepAndPrune };
 
   for (const mode of RACE_MODES) frameStats[mode].ran = false;
 
-  // Na corrida as três estratégias rodam sobre as mesmas posições, antes de qualquer
+  // Na corrida todas as estratégias rodam sobre as mesmas posições, antes de qualquer
   // resposta física, e cada uma faz o mesmo trabalho por par (registrar e testar).
   for (const mode of modes) {
     const fs = frameStats[mode];
@@ -640,7 +406,7 @@ export function detectCollisions() {
   }
 
   const activeStats = frameStats[active];
-  const _hits = activeStats.hits; // as três estratégias acham as mesmas colisões
+  const _hits = activeStats.hits; // todas as estratégias acham as mesmas colisões
   const comparisons = activeStats.comparisons;
   const pureComputeTime = activeStats.timeMs;
 
@@ -654,6 +420,7 @@ export function detectCollisions() {
 
   renderGridDebug(frameStats.grid.ran ? state.spatialGrid : null);
   renderOctreeDebug(frameStats.octree.ran ? state.octreeSimulator : null);
+  renderSapDebug(frameStats.sap.ran ? state.sweepAndPrune : null);
 
   // Cores e escala base (realce de hover aplicado aqui para não ser sobrescrito)
   for (const c of state.cubes) {
@@ -716,6 +483,7 @@ export function detectCollisions() {
     }
   }
 
+  syncEdgeColors();
   applyXray();
   return { comparisons, pureComputeTime };
 }
@@ -757,6 +525,8 @@ function hidePoolFrom(group, index) {
 export function clearDebugGizmos() {
   hidePoolFrom(setup.gridDebugGroup, 0);
   hidePoolFrom(setup.octreeDebugGroup, 0);
+  setup.sapDebugLines.geometry.setDrawRange(0, 0);
+  setup.sapSweepMesh.visible = false;
 }
 
 // --- Mapa de calor do raio-X ---
@@ -788,12 +558,11 @@ export function renderGridDebug(grid) {
   const cs = grid.cellSize;
   const xrayOn = setup.xray.level > 0;
   let i = 0, h = 0;
-  for (const [key, cubes] of grid.grid) {
-    const [cx, cy, cz] = SpatialGrid.decodeKey(key);
+  for (const c of grid.grid.values()) {
     const cell = poolItem(group, i++, _gridCellMat);
-    cell.position.set((cx + 0.5) * cs, (cy + 0.5) * cs, (cz + 0.5) * cs);
+    cell.position.set((c.x + 0.5) * cs, (c.y + 0.5) * cs, (c.z + 0.5) * cs);
     cell.scale.setScalar(cs);
-    const k = cubes.length;
+    const k = c.items.length;
     if (!xrayOn || k < 2) continue; // célula com um cubo só não testa nada
     const t = Math.min(1, Math.log2(k * (k - 1) / 2) / 5); // 1 par -> 0, 32+ pares -> 1
     const box = heatItem(heat, h++, HEAT_COLD.grid, t, 0.07 + 0.2 * t);
@@ -804,17 +573,25 @@ export function renderGridDebug(grid) {
   hidePoolFrom(heat, h);
 }
 
-// Nós da Octree (bounding boxes de cada nó da árvore; null esconde o gizmo)
+// Nós da Octree (bounding boxes de cada nó da árvore; null esconde o gizmo).
+// A raiz é um cubo mais alto que a arena (ver OctreeSimulator): cada caixa é desenhada
+// recortada pela arena, e a que fica inteira fora dela não aparece.
+const ARENA_MIN = ARENA_BOUNDS.min, ARENA_MAX = ARENA_BOUNDS.max;
 export function renderOctreeDebug(octree) {
   const group = setup.octreeDebugGroup;
   const heat = setup.octreeHeatGroup;
   if (!octree) { hidePoolFrom(group, 0); hidePoolFrom(heat, 0); return; }
   const xrayOn = setup.xray.level > 0;
   let i = 0, h = 0;
-  const traverse = (node) => {
+  octree.forEachNode(node => {
+    const { min, max } = node.bounds;
+    const x0 = Math.max(min.x, ARENA_MIN.x), x1 = Math.min(max.x, ARENA_MAX.x);
+    const y0 = Math.max(min.y, ARENA_MIN.y), y1 = Math.min(max.y, ARENA_MAX.y);
+    const z0 = Math.max(min.z, ARENA_MIN.z), z1 = Math.min(max.z, ARENA_MAX.z);
+    if (x1 <= x0 || y1 <= y0 || z1 <= z0) return;
     const item = poolItem(group, i++, octreeMaterial(node.depth));
-    item.position.copy(node.center);
-    node.bounds.getSize(item.scale);
+    item.position.set((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2);
+    item.scale.set(x1 - x0, y1 - y0, z1 - z0);
     // nó com objetos: os de cima (que cruzam planos) quase não aparecem para não cobrir a
     // cena inteira; os fundos, pequenos, acendem mais
     const k = node.objects.length;
@@ -823,14 +600,112 @@ export function renderOctreeDebug(octree) {
       // a raiz é maior que a caixa: preenchida, tingiria a tela inteira
       const depthWeight = node.depth === 0 ? 0 : Math.min(1, 0.1 + (node.depth - 1) * 0.35);
       const box = heatItem(heat, h++, HEAT_COLD.octree, t, (0.05 + 0.16 * t) * depthWeight);
-      box.position.copy(node.center);
-      node.bounds.getSize(box.scale).multiplyScalar(0.96);
+      box.position.copy(item.position);
+      box.scale.copy(item.scale).multiplyScalar(0.96);
     }
-    if (node.children) for (let k = 0; k < 8; k++) traverse(node.children[k]);
-  };
-  traverse(octree.root);
+  });
   hidePoolFrom(group, i);
   hidePoolFrom(heat, h);
+}
+
+// Régua do Sweep and Prune: na frente da arena, cada cubo vira o intervalo [min.x,
+// max.x] que ele ocupa no eixo de varredura, com traços nas pontas. Intervalos que se
+// sobrepõem vão para fileiras diferentes (a primeira fileira livre), então os empilhados
+// são justamente os pares que a varredura visita. Passadas SAP_MAX_ROWS fileiras, o
+// intervalo entra na fileira que termina antes, para a régua não sair do piso.
+//
+// Uma linha de varredura corre pelo eixo X: os intervalos que ela cruza (a "lista
+// ativa" do algoritmo) acendem. O cubo sob o ponteiro aparece em branco na régua, e
+// apontar um intervalo da régua destaca o cubo (pickSapInterval).
+const SAP_RULER_Z = ARENA_HALF_XZ + 1.4;
+const SAP_ROW_GAP = 0.45;
+const SAP_MAX_ROWS = 8;
+const SAP_TICK = 0.3;
+const SAP_Y = 0.08;
+const SAP_SWEEP_PERIOD = 3.2; // segundos para a varredura cruzar a arena
+const SAP_BASE = new THREE.Color(0xa3e635).multiplyScalar(0.5);
+const SAP_ACTIVE = new THREE.Color(0xd9f99d);
+const SAP_AXIS = new THREE.Color(0xa3e635).multiplyScalar(0.3);
+const _sapRowEnds = [];
+const _sapLayout = [];   // { cube, z, min, max } do último frame, para apontar com o ponteiro
+
+export function renderSapDebug(sap) {
+  const lines = setup.sapDebugLines;
+  if (!sap) {
+    lines.geometry.setDrawRange(0, 0);
+    setup.sapSweepMesh.visible = false;
+    _sapLayout.length = 0;
+    return;
+  }
+  const pos = lines.geometry.attributes.position;
+  const col = lines.geometry.attributes.color;
+  const arr = pos.array, carr = col.array;
+  const maxSegs = arr.length / 6;
+  let seg = 0;
+  const push = (x1, z1, x2, z2, color) => {
+    if (seg >= maxSegs) return;
+    const o = seg++ * 6;
+    arr[o] = x1; arr[o + 1] = SAP_Y; arr[o + 2] = z1;
+    arr[o + 3] = x2; arr[o + 4] = SAP_Y; arr[o + 5] = z2;
+    carr[o] = carr[o + 3] = color.r;
+    carr[o + 1] = carr[o + 4] = color.g;
+    carr[o + 2] = carr[o + 5] = color.b;
+  };
+
+  // Posição da varredura (parada com movimento reduzido)
+  const sweeping = !setup.prefersReducedMotion();
+  const phaseT = (performance.now() / 1000 / SAP_SWEEP_PERIOD) % 1;
+  const sweepX = -ARENA_HALF_XZ + phaseT * 2 * ARENA_HALF_XZ;
+
+  _sapRowEnds.length = 0;
+  _sapLayout.length = 0;
+  let rows = 0;
+  for (const c of sap.list) {
+    const { min, max } = c.aabb;
+    let row = _sapRowEnds.findIndex(end => end <= min.x);
+    if (row < 0) {
+      if (_sapRowEnds.length < SAP_MAX_ROWS) { row = _sapRowEnds.length; _sapRowEnds.push(0); }
+      else { row = 0; for (let r = 1; r < _sapRowEnds.length; r++) if (_sapRowEnds[r] < _sapRowEnds[row]) row = r; }
+    }
+    _sapRowEnds[row] = Math.max(_sapRowEnds[row], max.x);
+    rows = Math.max(rows, row + 1);
+    const z = SAP_RULER_Z + row * SAP_ROW_GAP;
+    _sapLayout.push({ cube: c, z, min: min.x, max: max.x });
+    const color = c === state.hoveredCube ? WHITE
+      : sweeping && min.x <= sweepX && sweepX < max.x ? SAP_ACTIVE : SAP_BASE;
+    push(min.x, z, max.x, z, color);
+    push(min.x, z - SAP_TICK / 2, min.x, z + SAP_TICK / 2, color);
+    push(max.x, z - SAP_TICK / 2, max.x, z + SAP_TICK / 2, color);
+  }
+  // eixo de varredura sob as fileiras
+  const zAxis = SAP_RULER_Z - SAP_ROW_GAP;
+  push(-ARENA_HALF_XZ, zAxis, ARENA_HALF_XZ, zAxis, SAP_AXIS);
+  const zEnd = SAP_RULER_Z + Math.max(rows - 1, 0) * SAP_ROW_GAP;
+  if (sweeping) push(sweepX, zAxis, sweepX, zEnd + SAP_TICK, SAP_ACTIVE);
+
+  lines.geometry.setDrawRange(0, seg * 2);
+  for (const attr of [pos, col]) {
+    attr.clearUpdateRanges();
+    attr.addUpdateRange(0, seg * 6);
+    attr.needsUpdate = true;
+  }
+
+  // Plano translúcido da varredura, atravessando a arena até a régua
+  const sweep = setup.sapSweepMesh;
+  sweep.visible = sweeping;
+  if (sweeping) {
+    const zFrom = -ARENA_HALF_XZ, zTo = zEnd + SAP_TICK;
+    sweep.position.set(sweepX, ARENA_HEIGHT / 2, (zFrom + zTo) / 2);
+    sweep.scale.set(zTo - zFrom, ARENA_HEIGHT, 1);
+  }
+}
+
+// Intervalo da régua sob um ponto do piso (x, z), ou null
+export function pickSapInterval(x, z) {
+  for (const it of _sapLayout) {
+    if (Math.abs(z - it.z) <= SAP_ROW_GAP / 2 && x >= it.min - 0.2 && x <= it.max + 0.2) return it.cube;
+  }
+  return null;
 }
 
 // ====================== LINHAS DE TESTE E VISTAS DA CORRIDA ======================
@@ -842,15 +717,15 @@ function fillPairLines(tested) {
   setup.updatePairLinesBuffer();
 }
 
-const MODE_LINE_HEX = { brute: 0xff7139, grid: 0x00ddff, octree: 0xa855f7 };
 
 // Antes de desenhar a coluna de uma estratégia na corrida: a cena é a mesma, mudam
 // as linhas dos pares que ela testou, o gizmo da estrutura e a paleta dos cubos.
 export function prepareRaceView(mode) {
   fillPairLines(frameStats[mode].tested);
-  setup.pairLinesMat.color.setHex(MODE_LINE_HEX[mode]);
+  setup.pairLinesMat.color.setStyle(STRATEGY[mode].color);
   setup.gridDebugGroup.visible = setup.gridHeatGroup.visible = mode === 'grid';
   setup.octreeDebugGroup.visible = setup.octreeHeatGroup.visible = mode === 'octree';
+  setup.sapDebugGroup.visible = mode === 'sap';
 
   const palette = setup.CUBE_PALETTES[mode];
   for (const c of state.cubes) {
@@ -860,12 +735,14 @@ export function prepareRaceView(mode) {
     color.copy(palette[c.paletteIndex]);
     if (c === state.hoveredCube) color.lerp(WHITE, 0.3);
   }
+  syncEdgeColors();
 }
 
 // Depois da última coluna: devolve os gizmos ao controle normal (visibilidade por item)
 export function finishRaceViews() {
   setup.gridDebugGroup.visible = setup.gridHeatGroup.visible = true;
   setup.octreeDebugGroup.visible = setup.octreeHeatGroup.visible = true;
+  setup.sapDebugGroup.visible = true;
 }
 
 // ====================== PASSE DE BRILHO ======================
@@ -875,12 +752,14 @@ export function finishRaceViews() {
 const _hitColor = setup.COLLISION_COLOR.clone().multiplyScalar(0.32);
 const GLOW_OFF_MAT = new THREE.MeshBasicMaterial({ color: 0x000000, fog: false });
 const GLOW_HIT_MAT = new THREE.MeshBasicMaterial({ color: _hitColor, fog: false });
-const GLOW_HIT_WIRE_MAT = new THREE.MeshBasicMaterial({ color: _hitColor, fog: false, wireframe: true });
+const GLOW_HIT_EDGE_MAT = new THREE.LineBasicMaterial({ color: _hitColor, fog: false });
 
 // Os gizmos da grade e da Octree são centenas de linhas sobrepostas: com o brilho
 // inteiro eles apagariam a cena, então emitem só uma fração.
 const GIZMO_GLOW = 0.18;
 const PAIR_LINE_OPACITY = setup.pairLinesMat.opacity;
+const SAP_OPACITY = setup.sapDebugMat.opacity;
+const SAP_SWEEP_OPACITY = setup.sapSweepMat.opacity;
 let _glowFactor = 1;
 function scaleGizmoGlow(factor) {
   _glowFactor = factor;
@@ -899,6 +778,8 @@ function applyGizmoOpacity() {
     _octreeMats[depth].opacity = Math.min(1, octreeOpacity(depth) + boost) * f;
   }
   setup.pairLinesMat.opacity = PAIR_LINE_OPACITY + 0.15 * x;
+  setup.sapDebugMat.opacity = Math.min(1, SAP_OPACITY + 0.3 * x) * f;
+  setup.sapSweepMat.opacity = SAP_SWEEP_OPACITY * (1 + x) * f;
   for (const group of [setup.gridHeatGroup, setup.octreeHeatGroup]) {
     for (const box of group.children) if (box.visible) box.material.opacity = box.userData.heat * x * f;
   }
@@ -915,12 +796,12 @@ function applyXray() {
   const ghost = x > 0;
   for (const c of state.cubes) {
     const opacity = 1 - (c.colliding || c.dragging ? 0.45 : 0.86) * x;
-    for (const m of [c.solidMaterial, c.wireframeMaterial]) {
-      m.transparent = ghost;
-      m.opacity = opacity;
-      m.depthWrite = x < 0.35;
-    }
-    c.mesh.castShadow = !ghost;
+    const m = c.solidMaterial;
+    m.transparent = ghost;
+    m.opacity = opacity;
+    m.depthWrite = x < 0.35;
+    c.edgeMaterial.opacity = Math.max(opacity, 0.5);
+    c.mesh.castShadow = !ghost && !state.wireframeEnabled;
   }
   applyGizmoOpacity();
 }
@@ -933,8 +814,10 @@ export const glowHooks = {
     for (const c of state.cubes) {
       if (c.arrow) c.arrow.visible = false;
       if (c.dragging) continue; // o cubo arrastado brilha com a própria cor
-      if (c.colliding) c.mesh.material = wire ? GLOW_HIT_WIRE_MAT : GLOW_HIT_MAT;
-      else if (wire || setup.xray.level > 0.3) c.mesh.visible = false; // no raio-X não tapa a estrutura
+      if (c.colliding) {
+        if (wire) c.edges.material = GLOW_HIT_EDGE_MAT; // a malha já não desenha nada
+        else c.mesh.material = GLOW_HIT_MAT;
+      } else if (wire || setup.xray.level > 0.3) c.mesh.visible = false; // no raio-X não tapa a estrutura
       else c.mesh.material = GLOW_OFF_MAT;
     }
   },
@@ -945,6 +828,7 @@ export const glowHooks = {
     for (const c of state.cubes) {
       if (c.arrow) c.arrow.visible = !c.dragging;
       c.mesh.visible = true;
+      c.edges.material = c.edgeMaterial;
       if (!c.dragging) c.mesh.material = wire ? c.wireframeMaterial : c.solidMaterial;
     }
   },

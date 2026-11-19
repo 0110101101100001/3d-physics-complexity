@@ -20,7 +20,9 @@
   --brute:  #ff7139;
   --grid:   #00ddff;
   --octree: #a855f7;
+  --sap:    #a3e635;
   --danger: #ff4e3e;
+  --hit:    #ff2e88; /* cor de colisão, a mesma dos cubos na cena */
   --ok:     #10b981;
 
   /* cor da estratégia ativa; --mode-text é a versão legível em texto pequeno */
@@ -40,6 +42,7 @@
 }
 body[data-mode="grid"]   { --mode: var(--grid);   --mode-text: var(--grid); }
 body[data-mode="octree"] { --mode: var(--octree); --mode-text: #c084fc; }
+body[data-mode="sap"]    { --mode: var(--sap);    --mode-text: var(--sap); }
 
 /* ─── Reset ─── */
 *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
@@ -139,7 +142,7 @@ body.stress-mode::before { background: none; }
 .topbar-version { color: var(--ink-soft); font-size: 12px; }
 .topbar-home:hover .topbar-logo { color: var(--mode-text); }
 
-/* As três teclas de estratégia: o controle principal da ferramenta */
+/* As teclas de estratégia: o controle principal da ferramenta */
 .mode-switch {
   justify-self: center;
   display: flex;
@@ -167,6 +170,7 @@ body.stress-mode::before { background: none; }
 }
 .mode-key[data-mode="grid"]   { --key: var(--grid); }
 .mode-key[data-mode="octree"] { --key: var(--octree); }
+.mode-key[data-mode="sap"]    { --key: var(--sap); }
 .mode-key::before {
   content: "";
   width: 9px; height: 9px;
@@ -175,6 +179,7 @@ body.stress-mode::before { background: none; }
   flex: none;
 }
 .mode-key__o { color: var(--ink-soft); font-weight: 400; font-size: 12px; }
+.mode-key__short { display: none; }
 .mode-key:hover { background: var(--surface-raised); }
 .mode-key[aria-pressed="true"] { background: var(--key); color: var(--ink-on-colour); }
 .mode-key[aria-pressed="true"]::before { background: var(--ink-on-colour); }
@@ -206,8 +211,43 @@ body.stress-mode::before { background: none; }
   border-color: var(--line-strong);
   color: var(--ink);
 }
-/* o som mostra o estado pelo ícone; o texto fica só para leitores de tela */
-#soundLabel { display: none; }
+/* Menu "mais opções" */
+.tool-menu { position: relative; }
+.tool[aria-expanded="true"] { background: var(--surface-raised); border-color: var(--line-strong); color: var(--ink); }
+.tool-menu__list {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 2100;
+  min-width: 220px;
+  padding: 4px;
+  display: grid;
+  gap: 2px;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-m);
+  box-shadow: 0 12px 32px rgb(0 0 0 / 0.45);
+}
+.tool-menu__list[hidden] { display: none; }
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 36px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--r-s);
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.menu-item:hover, .menu-item:focus-visible { background: var(--surface-raised); outline: none; }
+.menu-item svg { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; color: var(--ink-soft); }
+.menu-item__label { flex: 1; white-space: nowrap; }
+.menu-item[aria-checked="true"] svg { color: var(--mode-text); }
+.menu-item kbd { margin-left: auto; }
 .tool svg, .btn svg, .icon-btn svg {
   width: 16px; height: 16px;
   flex: none;
@@ -310,15 +350,22 @@ body.presentation-mode #statusBar {
 /* ==========================================================================
    TELAS MENORES
    ========================================================================== */
-@media (max-width: 1320px) {
+@media (max-width: 1760px) {
   .tool { padding: 0 9px; }
-  .tool__label { display: none; }
+  .tool:not(.tool--labeled) .tool__label { display: none; }
 }
-@media (max-width: 1000px) {
-  .shortcuts-bar { display: none; }
+/* sem espaço para os nove atalhos: saem reiniciar, stress test e wireframe, que têm botão no trilho */
+@media (max-width: 1500px) {
+  .shortcuts-bar > :nth-child(2), .shortcuts-bar > :nth-child(3), .shortcuts-bar > :nth-child(4) { display: none; }
+}
+@media (max-width: 1180px) {
   .mode-key { padding: 0 10px; }
   .mode-key__o { display: none; }
   .topbar-version { display: none; }
+}
+@media (max-width: 1000px) {
+  .shortcuts-bar { display: none; }
+  .tool--labeled .tool__label { display: none; }
 }
 @media (max-width: 720px) {
   :root { --topbar-h: 96px; }
@@ -330,6 +377,8 @@ body.presentation-mode #statusBar {
   }
   .mode-switch { grid-column: 1 / -1; grid-row: 2; align-self: start; }
   .mode-key { flex: 1; justify-content: center; padding: 0 6px; }
+  .mode-key__name { display: none; }
+  .mode-key__short { display: inline; }
   .tool { padding: 0 8px; }
   #controlPanel, #chartPanel { width: auto; left: var(--gap); right: var(--gap); }
   .status-readouts { gap: 14px; }

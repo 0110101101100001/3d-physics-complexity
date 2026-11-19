@@ -21,5 +21,12 @@ def simulador():
 
 
 if __name__ == "__main__":
-    # Debugger do Werkzeug só quando pedido explicitamente (FLASK_DEBUG=1)
-    app.run(debug=os.environ.get("FLASK_DEBUG") == "1")
+    port = int(os.environ.get("PORT", "5000"))
+    if os.environ.get("FLASK_DEBUG") == "1":
+        # Servidor de desenvolvimento com o debugger do Werkzeug, só quando pedido
+        app.run(debug=True, port=port)
+    else:
+        # Servidor WSGI de produção (o app.run do Flask não serve para isso)
+        from waitress import serve
+        print(f"Servindo em http://127.0.0.1:{port}")
+        serve(app, host=os.environ.get("HOST", "127.0.0.1"), port=port)

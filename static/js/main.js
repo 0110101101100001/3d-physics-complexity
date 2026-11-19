@@ -56,5 +56,5 @@ if (!webglAvailable()) {
   }
 }
 
-// O ponto de entrada da aplicação (startApp) é disparado automaticamente por ui.js
+// O ponto de entrada da aplicação é o próprio ui.js: ele arranca a cena
 // ao ser carregado como módulo. Não é necessário chamar nada aqui.

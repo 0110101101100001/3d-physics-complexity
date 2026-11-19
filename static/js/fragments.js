@@ -3,9 +3,8 @@
 // na broad-phase nem nos tempos medidos. São instâncias de uma única malha
 // (InstancedMesh), com física própria e simples: gravidade, quique no chão e nas
 // paredes da arena, e somem depois de um tempo.
-// Three.js é carregado globalmente via CDN (window.THREE).
 
-const THREE = window.THREE;
+import * as THREE from 'three';
 import { scene } from './three-setup.js';
 
 const MAX_FRAGMENTS = 320;

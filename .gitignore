@@ -9,3 +9,8 @@ __pycache__/
 .alethe/
 .env
 .env.local
+
+# Gerados localmente
+*.sqlite
+*.log
+hook.cache.json

@@ -1,8 +1,17 @@
 // --- three-setup.js — Configuração base do Three.js e pós-processamento ---
 // Exporta instâncias e helpers partilhados pelos módulos physics.js e ui.js.
-// Three.js é carregado globalmente via CDN (window.THREE) pelo index.html.
+// Three.js vem do import map de simulador.html ("three" e "three/addons/").
 
-const THREE = window.THREE;
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+
+// A estética foi ajustada na r128, antes da gestão de cor e das luzes físicas. Para a
+// cena continuar igual: cores sem conversão sRGB e saída linear, como era o padrão.
+THREE.ColorManagement.enabled = false;
 
 // Cena
 export const scene = new THREE.Scene();
@@ -21,6 +30,7 @@ renderer.setPixelRatio(1);
 renderer.setSize(window.innerWidth * pixelScale, window.innerHeight * pixelScale, false);
 renderer.domElement.style.width = '100vw';
 renderer.domElement.style.height = '100vh';
+renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
 document.body.appendChild(renderer.domElement);
 
 // Sombras
@@ -28,7 +38,7 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
 // OrbitControls
-export const controls = new THREE.OrbitControls(camera, renderer.domElement);
+export const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 controls.dampingFactor = 0.05;
 controls.maxPolarAngle = Math.PI / 2 - 0.02;
@@ -38,9 +48,10 @@ controls.maxDistance = 150;
 // Clock
 export const clock = new THREE.Clock();
 
-// Luzes
-const AMBIENT_INTENSITY = 0.7;
-const DIR_INTENSITY = 1.5;
+// Luzes. Desde a r155 as intensidades são físicas: o fator PI devolve o brilho que
+// estes valores davam no modo antigo.
+const AMBIENT_INTENSITY = 0.7 * Math.PI;
+const DIR_INTENSITY = 1.5 * Math.PI;
 const ambientLight = new THREE.AmbientLight(0xffe0d0, AMBIENT_INTENSITY);
 scene.add(ambientLight);
 export const dirLight = new THREE.DirectionalLight(0xffffff, DIR_INTENSITY);
@@ -87,7 +98,6 @@ const floorMaterial = new THREE.ShaderMaterial({
   depthWrite: false,
   side: THREE.DoubleSide,
   fog: true,
-  extensions: { derivatives: true },
   vertexShader: `
     #define MAX_RIPPLES ${MAX_RIPPLES}
     uniform float uTime;
@@ -198,13 +208,14 @@ cageMesh.position.set(0, 10, 0);
 scene.add(cageMesh);
 
 // Luz de impacto
-export const impactLight = new THREE.PointLight(0xffaa00, 0, 25);
+// decay 0: queda só pela distância de corte, perto do modelo antigo (não físico)
+export const impactLight = new THREE.PointLight(0xffaa00, 0, 25, 0);
 scene.add(impactLight);
 export const lightTimer = { value: 0 };
 
 export function triggerImpactLight(pos) {
   impactLight.position.copy(pos);
-  impactLight.intensity = 8;
+  impactLight.intensity = 8 * Math.PI;
   lightTimer.value = 0.12;
 }
 
@@ -238,6 +249,31 @@ export const gridHeatGroup = new THREE.Group();
 scene.add(gridHeatGroup);
 export const octreeHeatGroup = new THREE.Group();
 scene.add(octreeHeatGroup);
+
+// Régua do Sweep and Prune: intervalos no eixo X com cor por segmento, e o plano da
+// varredura atravessando a arena (os dois preenchidos por renderSapDebug)
+const SAP_MAX_SEGMENTS = 3 * 160 + 2;
+const sapDebugGeo = new THREE.BufferGeometry();
+sapDebugGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(SAP_MAX_SEGMENTS * 6), 3).setUsage(THREE.DynamicDrawUsage));
+sapDebugGeo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(SAP_MAX_SEGMENTS * 6), 3).setUsage(THREE.DynamicDrawUsage));
+sapDebugGeo.setDrawRange(0, 0);
+export const sapDebugMat = new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.9 });
+export const sapDebugLines = new THREE.LineSegments(sapDebugGeo, sapDebugMat);
+sapDebugLines.frustumCulled = false;
+
+const sapSweepGeo = new THREE.PlaneGeometry(1, 1);
+sapSweepGeo.rotateY(Math.PI / 2); // plano YZ: a escala x vira profundidade em z
+export const sapSweepMat = new THREE.MeshBasicMaterial({
+  color: 0xa3e635, transparent: true, opacity: 0.12, side: THREE.DoubleSide,
+  depthWrite: false, blending: THREE.AdditiveBlending, fog: false,
+});
+export const sapSweepMesh = new THREE.Mesh(sapSweepGeo, sapSweepMat);
+sapSweepMesh.visible = false;
+sapSweepMesh.raycast = () => {};
+
+export const sapDebugGroup = new THREE.Group();
+sapDebugGroup.add(sapDebugLines, sapSweepMesh);
+scene.add(sapDebugGroup);
 
 // ====================== PARTICLE SYSTEM — IMPACT SPARKS ======================
 export class ParticleSystem {
@@ -377,8 +413,8 @@ export function updatePairLinesBuffer() {
   pairLinesGeo.setDrawRange(0, activePairLineCount * 2);
   // Envia à GPU só o trecho usado do buffer (na corrida ele é reenviado uma vez por coluna)
   const attr = pairLinesGeo.attributes.position;
-  attr.updateRange.offset = 0;
-  attr.updateRange.count = activePairLineCount * 6;
+  attr.clearUpdateRanges();
+  attr.addUpdateRange(0, activePairLineCount * 6);
   attr.needsUpdate = true;
 }
 
@@ -448,8 +484,8 @@ export function updatePairTrail(delta, capture) {
   t.pos.set(pairLinesPos.subarray(0, n));
   t.geo.setDrawRange(0, activePairLineCount * 2);
   const attr = t.geo.attributes.position;
-  attr.updateRange.offset = 0;
-  attr.updateRange.count = n;
+  attr.clearUpdateRanges();
+  attr.addUpdateRange(0, n);
   attr.needsUpdate = true;
   t.mat.color.copy(pairLinesMat.color);
   t.count = activePairLineCount;
@@ -477,15 +513,23 @@ export const CUBE_PALETTES = {
     new THREE.Color(0x009eb3),
     new THREE.Color(0x33d6e8),
   ],
+  // violetas puxados para o azul: o rosa da colisão fica longe deles
   octree: [
-    new THREE.Color(0x9b4dca),
-    new THREE.Color(0x7b2cbf),
-    new THREE.Color(0xc084fc),
-    new THREE.Color(0xb06fe8),
+    new THREE.Color(0x8b5cf6),
+    new THREE.Color(0x6d28d9),
+    new THREE.Color(0xa78bfa),
+    new THREE.Color(0x7c3aed),
+  ],
+  sap: [
+    new THREE.Color(0x84cc16),
+    new THREE.Color(0xa3e635),
+    new THREE.Color(0x65a30d),
+    new THREE.Color(0xbef264),
   ],
 };
 
-export const COLLISION_COLOR = new THREE.Color(0xff2a2a);
+// Fora das quatro paletas (laranja, ciano, roxo, verde): a colisão se destaca em qualquer modo
+export const COLLISION_COLOR = new THREE.Color(0xff2e88);
 export const DRAG_COLOR = new THREE.Color(0xffdd44);
 
 // ====================== PÓS-PROCESSAMENTO: BRILHO + DITHERING + SCANLINES CRT ======================
@@ -496,24 +540,22 @@ const viewSize = () => new THREE.Vector2(window.innerWidth * pixelScale, window.
 // brilhar: linhas de teste, gizmos, cubos em colisão, faíscas e a crista das ondas do
 // piso; o resto fica preto, mas continua tapando o que está atrás. Essa imagem é borrada
 // pelo UnrealBloomPass e somada à cena normal no passe final, antes do dithering.
-const bloomAvailable = typeof THREE.UnrealBloomPass === 'function';
 const BLOOM_MIX = 0.7;
-let bloomEnabled = bloomAvailable;
-let bloomComposer = null;
+let bloomEnabled = true;
 
-if (bloomAvailable) {
-  bloomComposer = new THREE.EffectComposer(renderer);
-  bloomComposer.renderToScreen = false;
-  bloomComposer.setSize(window.innerWidth * pixelScale, window.innerHeight * pixelScale);
-  bloomComposer.addPass(new THREE.RenderPass(scene, camera));
-  // força, raio, limiar: limiar 0 porque o passe de brilho já contém só o que emite luz
-  bloomComposer.addPass(new THREE.UnrealBloomPass(viewSize(), 1.0, 0.55, 0.0));
-} else {
-  console.warn('UnrealBloomPass não carregou: o simulador segue sem o brilho neon.');
-}
+// Render targets de 8 bits, como na r128: desde a r152 o padrão é half-float, e as
+// milhares de linhas somadas passam de 1.0 e estouram o brilho.
+const ldrTarget = () => new THREE.WebGLRenderTarget(1, 1, { type: THREE.UnsignedByteType });
+
+const bloomComposer = new EffectComposer(renderer, ldrTarget());
+bloomComposer.renderToScreen = false;
+bloomComposer.setSize(window.innerWidth * pixelScale, window.innerHeight * pixelScale);
+bloomComposer.addPass(new RenderPass(scene, camera));
+// força, raio, limiar: limiar 0 porque o passe de brilho já contém só o que emite luz
+bloomComposer.addPass(new UnrealBloomPass(viewSize(), 1.0, 0.55, 0.0));
 
 export function setBloomEnabled(on) {
-  bloomEnabled = bloomAvailable && on;
+  bloomEnabled = on;
 }
 
 const BLACK = new THREE.Color(0x000000);
@@ -538,10 +580,10 @@ function endGlowPass() {
   renderer.shadowMap.autoUpdate = true;
 }
 
-export const composer = new THREE.EffectComposer(renderer);
+export const composer = new EffectComposer(renderer, ldrTarget());
 composer.setSize(window.innerWidth * pixelScale, window.innerHeight * pixelScale);
 
-const renderPass = new THREE.RenderPass(scene, camera);
+const renderPass = new RenderPass(scene, camera);
 composer.addPass(renderPass);
 
 export const ditherShader = {
@@ -632,13 +674,14 @@ export const ditherShader = {
 `
 };
 
-export const ditherPass = new THREE.ShaderPass(ditherShader);
+export const ditherPass = new ShaderPass(ditherShader);
 ditherPass.renderToScreen = true;
 composer.addPass(ditherPass);
 
 // --- Falha de sinal (glitch) na troca de estratégia ---
 const GLITCH_DURATION = 0.5;
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+export const prefersReducedMotion = () => reducedMotion.matches;
 let glitchLevel = 0;
 
 export function triggerGlitch() {
@@ -714,7 +757,7 @@ export function handleResize() {
   camera.updateProjectionMatrix();
   renderer.setSize(w, h, false);
   composer.setSize(viewW, h);
-  if (bloomComposer) bloomComposer.setSize(viewW, h);
+  bloomComposer.setSize(viewW, h);
   ditherPass.material.uniforms.resolution.value.set(viewW, h);
 }
 

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Simulador PHYSICS_SIM: Força Bruta, Grade Espacial e Octree</title>
+  <title>Simulador PHYSICS_SIM: Força Bruta, Grade Espacial, Octree e Sweep and Prune</title>
   <meta name="description" content="Cena 3D com até 150 cubos para comparar algoritmos de broad-phase, com tempo medido por frame e exportação em CSV.">
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -11,6 +11,15 @@
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/css/style.css">
   <link rel="stylesheet" href="/static/css/components.css">
+  <!-- Three.js como módulos ES: "three" e "three/addons/" resolvem para o CDN -->
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+      }
+    }
+  </script>
 </head>
 <body data-mode="brute">
 
@@ -23,14 +32,17 @@
     </a>
 
     <div class="mode-switch" role="group" aria-label="Estratégia de broad-phase">
-      <button type="button" class="mode-key" data-mode="brute" aria-pressed="true">
-        <span class="mode-key__name">Força bruta</span><span class="mode-key__o">O(n²)</span>
+      <button type="button" class="mode-key" data-mode="brute" aria-pressed="true" title="Força bruta (tecla 1)">
+        <span class="mode-key__name">Força bruta</span><span class="mode-key__short" aria-hidden="true">Bruta</span><span class="mode-key__o">O(n²)</span>
       </button>
-      <button type="button" class="mode-key" data-mode="grid" aria-pressed="false">
-        <span class="mode-key__name">Grade espacial</span><span class="mode-key__o">O(n)</span>
+      <button type="button" class="mode-key" data-mode="grid" aria-pressed="false" title="Grade espacial (tecla 2)">
+        <span class="mode-key__name">Grade espacial</span><span class="mode-key__short" aria-hidden="true">Grade</span><span class="mode-key__o">O(n)</span>
       </button>
-      <button type="button" class="mode-key" data-mode="octree" aria-pressed="false">
-        <span class="mode-key__name">Octree</span><span class="mode-key__o">O(n log n)</span>
+      <button type="button" class="mode-key" data-mode="octree" aria-pressed="false" title="Octree (tecla 3)">
+        <span class="mode-key__name">Octree</span><span class="mode-key__short" aria-hidden="true">Octree</span><span class="mode-key__o">O(n log n)</span>
+      </button>
+      <button type="button" class="mode-key" data-mode="sap" aria-pressed="false" title="Sweep and prune (tecla 4)">
+        <span class="mode-key__name">Sweep and prune</span><span class="mode-key__short" aria-hidden="true">SAP</span><span class="mode-key__o">O(n + k)</span>
       </button>
     </div>
 
@@ -43,27 +55,39 @@
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
         <span class="tool__label">Telemetria</span>
       </button>
-      <button type="button" id="raceBtn" class="tool" aria-pressed="false" aria-label="Corrida" title="Corrida: as três estratégias lado a lado (C)">
+      <button type="button" id="raceBtn" class="tool tool--labeled" aria-pressed="false" aria-label="Corrida" title="Corrida: as quatro estratégias lado a lado (C)">
         <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16M15 4v16"/></svg>
         <span class="tool__label">Corrida</span>
       </button>
-      <button type="button" id="benchTopbarBtn" class="tool" aria-label="Benchmark" title="Rodar o benchmark (B)">
+      <button type="button" id="benchTopbarBtn" class="tool tool--labeled" aria-label="Benchmark" title="Rodar o benchmark (B)">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
         <span class="tool__label">Benchmark</span>
       </button>
-      <button type="button" id="presentBtn" class="tool" aria-pressed="false" aria-label="Apresentar" title="Modo apresentação (P)">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
-        <span class="tool__label">Apresentar</span>
-      </button>
-      <button type="button" id="soundBtn" class="tool" aria-pressed="true" aria-label="Som" title="Ligar ou desligar o som">
-        <svg id="soundIconOn" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
-        <svg id="soundIconOff" viewBox="0 0 24 24" aria-hidden="true" style="display:none"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="m23 9-6 6M17 9l6 6"/></svg>
-        <span class="tool__label" id="soundLabel">Som</span>
-      </button>
-      <button type="button" id="theoryBtn" class="tool" aria-label="Teoria" title="Abrir a teoria">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5v14z"/><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5"/></svg>
-        <span class="tool__label">Teoria</span>
-      </button>
+      <!-- Ações menos usadas num menu: a barra fica com os trilhos, a corrida e o benchmark -->
+      <div class="tool-menu">
+        <button type="button" id="moreBtn" class="tool" aria-haspopup="menu" aria-expanded="false" aria-controls="moreMenu" aria-label="Mais opções" title="Mais opções">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg>
+        </button>
+        <div id="moreMenu" class="tool-menu__list" role="menu" aria-label="Mais opções" hidden>
+          <button type="button" id="presentBtn" class="menu-item" role="menuitemcheckbox" aria-checked="false" tabindex="-1">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+            <span class="menu-item__label">Modo apresentação</span><kbd>P</kbd>
+          </button>
+          <button type="button" id="soundBtn" class="menu-item" role="menuitemcheckbox" aria-checked="true" tabindex="-1">
+            <svg id="soundIconOn" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+            <svg id="soundIconOff" viewBox="0 0 24 24" aria-hidden="true" style="display:none"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="m23 9-6 6M17 9l6 6"/></svg>
+            <span class="menu-item__label" id="soundLabel">Som ligado</span>
+          </button>
+          <button type="button" id="proofBtn" class="menu-item" role="menuitem" tabindex="-1">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 4H7l6 8-6 8h10"/></svg>
+            <span class="menu-item__label">Prova de complexidade</span>
+          </button>
+          <button type="button" id="theoryBtn" class="menu-item" role="menuitem" tabindex="-1">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5v14z"/><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5"/></svg>
+            <span class="menu-item__label">Teoria</span>
+          </button>
+        </div>
+      </div>
     </div>
   </header>
 
@@ -118,6 +142,7 @@
         <option value="brute">Força Bruta O(n²)</option>
         <option value="grid">Grade Espacial Uniforme O(n)</option>
         <option value="octree">Particionamento Hierárquico O(n log n)</option>
+        <option value="sap">Sweep and Prune O(n + k)</option>
       </select>
     </section>
 
@@ -170,14 +195,15 @@
     </div>
 
     <section class="rail-section">
-      <h2 class="rail-title">Curvas teóricas por número de cubos</h2>
-      <canvas id="perfChart" width="280" height="200" role="img" aria-label="Gráfico das curvas teóricas de crescimento do tempo de detecção em função do número de cubos, para as três estratégias"></canvas>
+      <h2 class="rail-title">Crescimento por número de cubos</h2>
+      <canvas id="perfChart" width="280" height="200" role="img" aria-label="Gráfico das curvas teóricas de crescimento do tempo de detecção em função do número de cubos, para as quatro estratégias"></canvas>
       <ul id="chartLegend">
         <li class="legend-item" data-mode="brute">Força bruta</li>
         <li class="legend-item" data-mode="grid">Grade</li>
         <li class="legend-item" data-mode="octree">Octree</li>
+        <li class="legend-item" data-mode="sap">Sweep and prune</li>
       </ul>
-      <p class="chart-note">A linha vertical marca o N atual.</p>
+      <p class="chart-note" id="chartNote">Curvas ilustrativas até N → ∞. A faixa clara é o que o simulador alcança (até 150 cubos) e a linha vertical marca o N atual. Rode o benchmark (B) para ver os tempos medidos aqui.</p>
     </section>
 
     <section class="rail-section">
@@ -217,7 +243,7 @@
     </details>
   </aside>
 
-  <!-- BENCHMARK: abre embaixo, no centro, com as três estratégias lado a lado -->
+  <!-- BENCHMARK: abre embaixo, no centro, com as quatro estratégias lado a lado -->
   <section id="benchWidget" aria-label="Benchmark">
     <header class="bench-widget-header">
       <h2 class="bench-widget-title">Benchmark</h2>
@@ -227,7 +253,7 @@
         <span class="bench-widget-tooltip">
           <strong>Tempo:</strong> média de pelo menos 20 execuções da detecção na cena atual, medida com <code>performance.now()</code>. As execuções se repetem até somar tempo suficiente para vencer a resolução do relógio do navegador.<br><br>
           <strong>Fases:</strong> a barra separa o tempo de montar a estrutura (trecho claro) do tempo de consultar e testar os pares (trecho cheio).<br><br>
-          <strong>Pares:</strong> quantos pares de cubos foram testados com AABB num frame. A força bruta testa N(N−1)/2; a grade e a Octree reduzem esse número.<br><br>
+          <strong>Pares:</strong> quantos pares de cubos foram testados com AABB num frame. A força bruta testa N(N−1)/2; as outras estratégias reduzem esse número.<br><br>
           <strong>Ajuste empírico:</strong> mede cenas sintéticas de 10 a 150 cubos e ajusta t = a·n<sup>k</sup> por mínimos quadrados em escala log-log. O expoente k é a inclinação da reta.
         </span>
       </span>
@@ -246,12 +272,12 @@
         <svg id="fitChart" class="fit-chart" viewBox="0 0 280 140" role="img" aria-label="Tempo de detecção por número de cubos em escala log-log, com a reta ajustada de cada estratégia"></svg>
         <ul id="benchFitList" class="fit-list"></ul>
       </div>
-      <p class="bench-fit-note">Cenas sintéticas com a arena e os tamanhos de cubo do simulador. Como a arena é fixa, a cena fica mais densa conforme N cresce, e a grade e a Octree medem acima do caso médio teórico.</p>
+      <p class="bench-fit-note">Cenas sintéticas com a arena e os tamanhos de cubo do simulador. Como a arena é fixa, a cena fica mais densa conforme N cresce, e a grade e a Octree medem acima do caso médio teórico. Os cubos do benchmark estão parados: para o Sweep and Prune é o melhor caso da coerência temporal, sem trocas na ordenação. As medições rodam num Web Worker, sem travar a cena.</p>
     </div>
   </section>
 
   <!-- CORRIDA: uma coluna por estratégia, sobre a mesma cena -->
-  <div id="raceOverlay" aria-label="Corrida entre as três estratégias">
+  <div id="raceOverlay" aria-label="Corrida entre as quatro estratégias">
     <section class="race-col" data-mode="brute">
       <div class="race-card">
         <header class="race-card__head">
@@ -294,6 +320,20 @@
         <div class="race-card__track"><div class="race-card__fill" data-race="fill"><span class="phase-bar__build" data-race="build"></span><span class="phase-bar__query"></span></div></div>
       </div>
     </section>
+    <section class="race-col" data-mode="sap">
+      <div class="race-card">
+        <header class="race-card__head">
+          <span class="race-card__name">Sweep and prune</span>
+          <span class="race-card__o">O(n + k)</span>
+          <span class="race-card__rank" data-race="rank">—</span>
+        </header>
+        <div class="race-card__nums">
+          <span><strong data-race="pairs">—</strong> pares</span>
+          <span><strong data-race="time">—</strong></span>
+        </div>
+        <div class="race-card__track"><div class="race-card__fill" data-race="fill"><span class="phase-bar__build" data-race="build"></span><span class="phase-bar__query"></span></div></div>
+      </div>
+    </section>
   </div>
 
   <!-- RODAPÉ: leituras sempre visíveis e atalhos -->
@@ -317,6 +357,232 @@
       <span><kbd>B</kbd> benchmark</span>
     </div>
   </footer>
+
+  <!-- MODAL: prova de complexidade (fórmulas em TeX, renderizadas pelo KaTeX em proof.js) -->
+  <div id="proofModal" class="modal hidden">
+    <div class="modal-content modal-content--wide proof" role="dialog" aria-modal="true" aria-labelledby="proofTitle">
+      <header class="modal-header">
+        <div>
+          <h2 id="proofTitle">Prova de complexidade</h2>
+          <p class="modal-lead">Correção e custo de cada estratégia, com as hipóteses de cada resultado e a verificação na própria simulação.</p>
+        </div>
+        <button type="button" id="closeProofBtn" class="icon-btn" aria-label="Fechar a prova de complexidade">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+        </button>
+      </header>
+
+      <div class="proof-tabs" role="tablist" aria-label="Seções da prova">
+        <button type="button" role="tab" id="proofTab-resumo" aria-controls="proof-resumo" aria-selected="true">Resumo</button>
+        <button type="button" role="tab" id="proofTab-modelo" aria-controls="proof-modelo" aria-selected="false" tabindex="-1">Modelo de custo</button>
+        <button type="button" role="tab" id="proofTab-brute" aria-controls="proof-brute" aria-selected="false" tabindex="-1" data-mode="brute">Força bruta</button>
+        <button type="button" role="tab" id="proofTab-grid" aria-controls="proof-grid" aria-selected="false" tabindex="-1" data-mode="grid">Grade</button>
+        <button type="button" role="tab" id="proofTab-octree" aria-controls="proof-octree" aria-selected="false" tabindex="-1" data-mode="octree">Octree</button>
+        <button type="button" role="tab" id="proofTab-sap" aria-controls="proof-sap" aria-selected="false" tabindex="-1" data-mode="sap">Sweep and Prune</button>
+        <button type="button" role="tab" id="proofTab-verificacao" aria-controls="proof-verificacao" aria-selected="false" tabindex="-1">Verificação</button>
+      </div>
+
+      <div class="proof-body">
+        <!-- ===================== RESUMO ===================== -->
+        <section class="proof-panel" role="tabpanel" id="proof-resumo" aria-labelledby="proofTab-resumo">
+          <p>Seja \(n\) o número de cubos, \(M(n)\) o custo de montar a estrutura e \(C(n)\) o número de <strong>pares candidatos</strong>, os pares que a estratégia entrega ao teste AABB. Cada aba demonstra o resultado clássico da estratégia como um teorema, com a hipótese de que ele depende, e depois mostra o que acontece quando a hipótese não vale.</p>
+          <div class="table-scroll">
+            <table class="data-table proof-table">
+              <thead>
+                <tr><th>Estratégia</th><th>Resultado clássico</th><th>Hipótese do teorema</th><th>Pior caso</th></tr>
+              </thead>
+              <tbody>
+                <tr data-mode="brute"><td><span class="proof-key">Força bruta</span></td><td>\(\Theta(n^2)\) <span class="proof-ref">Teorema 1</span></td><td>nenhuma: vale para toda cena</td><td>\(\Theta(n^2)\)</td></tr>
+                <tr data-mode="grid"><td><span class="proof-key">Grade espacial</span></td><td>\(O(n)\) <span class="proof-ref">Teorema 2</span></td><td>cada célula com no máximo \(K\) cubos</td><td>\(\Theta(n^2)\)</td></tr>
+                <tr data-mode="octree"><td><span class="proof-key">Octree</span></td><td>\(O(n \log n)\) <span class="proof-ref">Teorema 3</span></td><td>cada nó com no máximo \(K\) objetos e profundidade \(O(\log n)\)</td><td>\(\Theta(n^2)\)</td></tr>
+                <tr data-mode="sap"><td><span class="proof-key">Sweep and Prune</span></td><td>\(O(n + k)\) <span class="proof-ref">Teorema 4</span></td><td>coerência temporal (\(2\delta \lt s_{\min}\)); \(O(n)\) se \(k = O(n)\)</td><td>\(\Theta(n^2)\)</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>Os teoremas 2 a 4 são limites de pior caso <em>condicionados à hipótese</em>. Os corolários de cada aba mostram quando a hipótese vale em média: com densidade constante, a grade tem custo esperado \(\Theta(n)\); com objetos pontuais uniformes, a Octree tem custo esperado \(O(n \log n)\).</p>
+          <div class="proof-callout">
+            <p><strong>Limites das hipóteses no simulador.</strong> A cena tem cubos de tamanho fixo numa arena fixa. Com densidade constante e cubos de tamanho fixo, os cubos que cruzam planos divisores quebram a hipótese da Octree (os pares viram \(\Omega(n^{4/3})\)) e o \(k\) do Sweep and Prune cresce como \(n^{5/3}\). Na arena fixa a densidade cresce com \(n\), então nenhuma ocupação fica limitada e as quatro estratégias são \(\Theta(n^2)\): o que muda é a constante, e é ela que decide quem vence até \(n = 150\).</p>
+          </div>
+          <p>As provas de correção de cada aba garantem que as quatro estratégias acham exatamente as mesmas colisões. A aba <strong>Verificação</strong> confere isso na cena atual e mede os expoentes de \(C(n)\).</p>
+        </section>
+
+        <!-- ===================== MODELO ===================== -->
+        <section class="proof-panel" role="tabpanel" id="proof-modelo" aria-labelledby="proofTab-modelo" hidden>
+          <h3>Operação básica e medida de custo</h3>
+          <p>A operação básica é o teste AABB de um par, que compara as projeções nos três eixos em tempo constante: dois cubos de centros \(p_a, p_b\) e lados \(s_a, s_b\) se sobrepõem se e somente se</p>
+          \[ |p_a^x - p_b^x| \lt \tfrac{s_a + s_b}{2} \;\wedge\; |p_a^y - p_b^y| \lt \tfrac{s_a + s_b}{2} \;\wedge\; |p_a^z - p_b^z| \lt \tfrac{s_a + s_b}{2}. \]
+          <p>O custo de um frame é \(T(n) = M(n) + Q(n)\), em que \(M\) é montar a estrutura e \(Q\) é percorrê-la entregando os pares candidatos. Em todas as estratégias \(Q(n) = \Theta(C(n))\) a menos de termos lineares, então a análise conta \(C(n)\). A contagem tem uma vantagem sobre o tempo: não depende da máquina, do compilador JIT nem do relógio do navegador.</p>
+
+          <h3>Hipóteses</h3>
+          <ul class="proof-list">
+            <li><strong>H1 (tamanho limitado).</strong> Os lados dos cubos estão em \([s_{\min}, s_{\max}] = [2, 6]\), com média \(\bar s = 4\).</li>
+            <li><strong>H2 (posições uniformes).</strong> Os centros são independentes e uniformes numa caixa \(L \times \tfrac{L}{2} \times L\), como a arena (\(L = 40\)).</li>
+            <li><strong>H3a (arena fixa).</strong> \(L\) constante: a densidade \(\rho = n / V\) cresce com \(n\). É o simulador.</li>
+            <li><strong>H3b (densidade constante).</strong> \(V \propto n\), ou seja, \(L \propto n^{1/3}\). É o regime em que as complexidades de caso médio são enunciadas.</li>
+          </ul>
+
+          <h3>Lema (sobreposição de intervalos)</h3>
+          <p>Sejam dois intervalos de comprimentos \(a\) e \(b\) com início uniforme num segmento de comprimento \(L \gg a, b\). A probabilidade de se sobreporem é</p>
+          \[ P(\text{sobreposição}) = \frac{a + b}{L} + O\!\left(\frac{(a+b)^2}{L^2}\right). \]
+          <p><em>Prova.</em> Fixado o primeiro intervalo \([x, x+a]\), o segundo, \([y, y+b]\), o toca se e só se \(y \in (x - b,\, x + a)\), um trecho de comprimento \(a + b\); a correção vem das bordas do segmento.</p>
+          <p>Por H2 os três eixos são independentes, então dois cubos estão a menos de \(r\) em cada eixo com probabilidade \(\Theta(r^3 / V)\). Somando sobre os \(\binom{n}{2}\) pares:</p>
+          \[ \mathbb{E}[\#\text{pares a distância} \lt r \text{ por eixo}] = \Theta\!\left(\frac{n^2 r^3}{V}\right) = \Theta(\rho\, n\, r^3). \]
+          <p>Esse é o fato central: com densidade constante (H3b), pares próximos são \(\Theta(n)\); na arena fixa (H3a), \(\Theta(n^2)\).</p>
+        </section>
+
+        <!-- ===================== FORÇA BRUTA ===================== -->
+        <section class="proof-panel" role="tabpanel" id="proof-brute" aria-labelledby="proofTab-brute" hidden>
+          <h3>Correção</h3>
+          <p>O laço duplo visita todo par \(\{i, j\}\) com \(i \lt j\) exatamente uma vez, então toda colisão é testada e nenhum par se repete.</p>
+          <div class="proof-thm" data-mode="brute">
+            <p class="proof-thm__title">Teorema 1 (força bruta, \(\Theta(n^2)\))</p>
+            <p>Para qualquer configuração, \(C(n) = \binom{n}{2} = \frac{n(n-1)}{2}\), logo \(C(n) = \Theta(n^2)\) no melhor, no médio e no pior caso, e \(M(n) = 0\).</p>
+          </div>
+          <p><em>Prova.</em> Para cada \(i\) o laço interno roda \(n - 1 - i\) vezes:</p>
+          \[ C(n) = \sum_{i=0}^{n-1} (n - 1 - i) = \sum_{m=0}^{n-1} m = \frac{n(n-1)}{2}. \]
+          <p>Para \(n \ge 2\) vale \(n - 1 \ge \tfrac{n}{2}\), então \(\tfrac{n^2}{4} \le C(n) \le \tfrac{n^2}{2}\), que é a definição de \(\Theta(n^2)\) com constantes \(\tfrac14\) e \(\tfrac12\). Não há estrutura, então \(M(n) = 0\).</p>
+          <p>Com \(n = 150\): \(C = 11\,175\). A aba Verificação confere esse valor na cena atual.</p>
+        </section>
+
+        <!-- ===================== GRADE ===================== -->
+        <section class="proof-panel" role="tabpanel" id="proof-grid" aria-labelledby="proofTab-grid" hidden>
+          <p>O espaço é dividido em células de lado \(c\). O cubo com AABB \([m, M]\) entra em toda célula de índices \(\lfloor m_x / c \rfloor \ldots \lfloor M_x / c \rfloor\) (e o mesmo em \(y\) e \(z\)). Seja \(k_c\) o número de cubos na célula \(c\).</p>
+
+          <div class="proof-thm" data-mode="grid">
+            <p class="proof-thm__title">Teorema 2 (grade espacial, \(O(n)\))</p>
+            <p>Sob H1, se nenhuma célula contém mais que \(K\) cubos, com \(K\) constante, então</p>
+            \[ M(n) = O(n), \qquad C(n) \le Q(n) = O(n), \qquad T(n) = O(n). \]
+          </div>
+          <p><em>Prova.</em> <strong>Montagem.</strong> Por H1, um cubo cobre no máximo \(\lceil s_{\max}/c \rceil + 1\) índices por eixo, logo no máximo \(m = (\lceil s_{\max}/c \rceil + 1)^3\) células (com \(c = 2\): \(m = 64\)). Inserir em uma célula custa \(O(1)\) esperado na tabela hash, então \(M(n) \le m\,n = O(n)\).</p>
+          <p><strong>Consulta.</strong> A consulta percorre todos os pares dentro de cada célula, \(Q(n) = \sum_c \binom{k_c}{2}\). Só as células ocupadas contribuem, e há no máximo \(m\,n\) delas (cada cubo ocupa até \(m\)). Com \(k_c \le K\):</p>
+          \[ Q(n) \;\le\; \sum_{c \text{ ocupada}} \binom{K}{2} \;\le\; m\,n \cdot \frac{K(K-1)}{2} \;=\; O(n). \]
+          <p>Cada par candidato é entregue uma vez (unicidade, abaixo), então \(C(n) \le Q(n)\). Somando, \(T(n) = M(n) + Q(n) = O(n)\).</p>
+
+          <div class="proof-thm proof-thm--cor" data-mode="grid">
+            <p class="proof-thm__title">Corolário 2.1 (densidade constante)</p>
+            <p>Sob H1, H2 e H3b, \(\mathbb{E}[Q(n)] = \Theta(n)\) e \(\mathbb{E}[T(n)] = \Theta(n)\).</p>
+          </div>
+          <p><em>Prova.</em> Dois cubos só partilham uma célula se seus centros distam menos de \(r = s_{\max} + c\) em cada eixo, e partilham no máximo \(m\) células. Cada par dentro de uma célula conta uma vez em \(Q\), então, pelo lema do Modelo,</p>
+          \[ \mathbb{E}[Q] \;\le\; m \binom{n}{2} \frac{(2r)^3}{V} = \Theta\!\left(\frac{n^2}{V}\right) = \Theta(\rho\, n). \]
+          <p>Com densidade \(\rho = n/V\) constante, \(\mathbb{E}[Q] = O(n)\). Como \(M(n) \ge n\) (todo cubo é inserido), \(\mathbb{E}[T] = \Theta(n)\).</p>
+
+          <h3>Correção</h3>
+          <p><strong>Completude.</strong> Se \(A\) e \(B\) se sobrepõem, as projeções em cada eixo se tocam, então as faixas de índices de célula se interceptam em cada eixo e os dois partilham ao menos uma célula: o par é enumerado.</p>
+          <p><strong>Unicidade.</strong> Um par pode partilhar várias células. Ele só é reportado na <em>célula dona</em></p>
+          \[ o(A, B) = \Big( \max\big(\lfloor A^{\min}_x / c \rfloor, \lfloor B^{\min}_x / c \rfloor\big),\; \ldots_y,\; \ldots_z \Big), \]
+          <p>o canto mínimo da interseção das duas faixas. Essa célula é única e pertence às duas faixas, então o par sai exatamente uma vez, sem conjunto de pares já vistos.</p>
+
+          <h3>Limites da hipótese</h3>
+          <ul class="proof-list">
+            <li><strong>Arena fixa (H3a):</strong> a ocupação por célula cresce com \(n\), e pela mesma conta \(\mathbb{E}[Q] = \Theta(n^2/V) = \Theta(n^2)\), com constante pequena (no simulador, cerca de 4% dos pares da força bruta com 150 cubos).</li>
+            <li><strong>Pior caso:</strong> todos os cubos numa célula, \(k_c = n\) e \(Q = \binom{n}{2} = \Theta(n^2)\).</li>
+            <li><strong>Escolha de \(c\):</strong> \(c\) pequeno aumenta \(m\) (montagem cara, poucos pares por célula); \(c\) grande aumenta \(K\). É a troca que a barra de custo por fase mostra ao mexer no controle.</li>
+          </ul>
+        </section>
+
+        <!-- ===================== OCTREE ===================== -->
+        <section class="proof-panel" role="tabpanel" id="proof-octree" aria-labelledby="proofTab-octree" hidden>
+          <p>Cada nó divide sua região em 8 octantes. Um objeto desce para o filho que o contém por inteiro; se cruza um plano divisor (<em>straddling</em>), fica no nó atual. Uma folha com mais de \(K\) objetos se subdivide (no simulador \(K = 4\)), até a profundidade máxima \(D\).</p>
+
+          <div class="proof-thm" data-mode="octree">
+            <p class="proof-thm__title">Teorema 3 (Octree, \(O(n \log n)\))</p>
+            <p>Se cada nó guarda no máximo \(K\) objetos e a árvore tem profundidade \(D\), então</p>
+            \[ M(n) = O(nD), \qquad C(n) \le K(D+1)\,n, \qquad T(n) = O(nD). \]
+            <p>Em particular, se \(D = O(\log n)\), então \(T(n) = O(n \log n)\).</p>
+          </div>
+          <p><em>Prova.</em> <strong>Montagem.</strong> Uma inserção desce no máximo \(D\) níveis com \(O(1)\) por nível (testar o centro e escolher o filho), então \(M(n) = O(nD)\). Subdividir uma folha redistribui seus \(K+1\) objetos, cada um um nível abaixo; isso também cabe em \(O(D)\) por objeto.</p>
+          <p><strong>Pares.</strong> Atribua cada par testado ao objeto do nó mais profundo dos dois, digamos \(b\), guardado no nó \(v\). Pela forma da consulta, o parceiro \(a\) está em \(v\) ou é herdado de um ancestral de \(v\) (os herdados só vêm de ancestrais). O nó \(v\) tem no máximo \(K\) objetos, e há no máximo \(D\) ancestrais com no máximo \(K\) cada. Então \(b\) tem no máximo \(K(D+1)\) parceiros, e somando sobre os \(n\) objetos:</p>
+          \[ C(n) \;\le\; K(D+1)\, n. \]
+          <p><strong>Travessia.</strong> Cada nó interno nasceu de uma folha com mais de \(K\) objetos; os nós internos de uma mesma profundidade são disjuntos, então há no máximo \(n/K\) por nível e \(O(nD/K)\) no total, com 8 filhos cada. Visitar os nós custa \(O(nD)\). Somando, \(T(n) = O(nD) + O(K D n) = O(nD)\).</p>
+
+          <div class="proof-thm proof-thm--cor" data-mode="octree">
+            <p class="proof-thm__title">Corolário 3.1 (objetos pontuais uniformes)</p>
+            <p>Para \(n\) pontos independentes e uniformes na raiz, a profundidade satisfaz \(D \le \tfrac{K+1}{K}\log_8 n + t\) com probabilidade ao menos \(1 - 8^{-tK}\). Logo \(D = O(\log n)\) com alta probabilidade e \(T(n) = O(n \log n)\).</p>
+          </div>
+          <p><em>Prova.</em> Pontos não cruzam planos, então a hipótese de ocupação do Teorema 3 vale por construção: só folhas guardam objetos, com no máximo \(K\) cada. Um nó de profundidade \(d\) cobre uma fração \(8^{-d}\) da raiz, então contém cada ponto com probabilidade \(8^{-d}\). A árvore chega à profundidade \(d+1\) só se algum nó de profundidade \(d\) tem mais de \(K\) pontos. Pela cota da união sobre os \(8^d\) nós e sobre os conjuntos de \(K+1\) pontos:</p>
+          \[ P(D \gt d) \;\le\; 8^d \binom{n}{K+1} 8^{-d(K+1)} \;\le\; 8^d \left(n\, 8^{-d}\right)^{K+1} = n^{K+1}\, 8^{-dK}. \]
+          <p>Com \(d = \tfrac{K+1}{K}\log_8 n + t\), o lado direito vale \(8^{-tK}\). Aplicando o Teorema 3, \(T(n) = O(n \log n)\) com alta probabilidade.</p>
+          <p>No simulador a profundidade máxima é escolhida no controle (1 a 10). Com \(D\) fixo e ocupação limitada, o Teorema 3 dá \(O(n)\); mas, com \(D\) fixo, a ocupação das folhas cresce com \(n\), e a hipótese só se mantém se \(D\) acompanhar \(\log_8 n\).</p>
+
+          <h3>Correção</h3>
+          <p><strong>Invariante.</strong> Todo objeto está contido na região do nó onde fica.</p>
+          <p><strong>Completude.</strong> Sejam \(A\) e \(B\) sobrepostos, guardados nos nós \(u\) e \(v\). O teste AABB é estrito, então \(A \cap B\) tem interior não vazio, e os interiores de \(u\) e \(v\) se interceptam. Em uma octree, dois nós cujos interiores se interceptam são aninhados: \(u = v\), ou um é ancestral do outro. Se \(u = v\), o par é testado dentro do nó. Se \(u\) é ancestral de \(v\), todo nó no caminho de \(u\) até \(v\) contém \(v \supset B\), e \(A\) toca \(B\), logo \(A\) toca cada um deles e é repassado até \(v\), onde é testado contra \(B\).</p>
+          <p><strong>Unicidade.</strong> O par é testado só no nó do mais profundo dos dois.</p>
+
+          <h3>Limites da hipótese: cubos de tamanho fixo</h3>
+          <p>Com objetos de tamanho \(s \gt 0\), a ocupação dos nós de cima não fica limitada: quem cruza um plano divisor fica preso no nó.</p>
+          <p><strong>Proposição 3.2.</strong> Sob H1, H2 e H3b, \(\mathbb{E}[C(n)] = \Omega(n^{4/3})\).</p>
+          <p><em>Prova.</em> Um cubo de lado \(s\) cruza o plano central de um eixo com probabilidade \(s/L\) (lema do Modelo). Seja \(S\) o número de cubos presos na raiz por cruzarem um dos planos centrais em \(x\) ou \(z\) (na raiz do simulador o corte em \(y\) fica no teto da arena). Então \(S\) é binomial com \(p \approx 2\bar s / L\). Os \(S\) cubos da raiz são testados todos contra todos:</p>
+          \[ \mathbb{E}[C(n)] \;\ge\; \mathbb{E}\!\left[\binom{S}{2}\right] = \binom{n}{2} p^2 \approx \binom{n}{2}\left(\frac{2\bar s}{L}\right)^{2} = \Theta\!\left(\frac{n^2}{L^2}\right). \]
+          <p>Com densidade constante, \(L \propto n^{1/3}\), o que dá \(\Theta(n^{4/3})\); na arena fixa, \(\Theta(n^2)\).</p>
+          <p>Os níveis de baixo somam mais pares do mesmo tipo, e o experimento da aba Verificação mede um expoente perto de \(1{,}5\). <strong>Pior caso:</strong> todos os cubos cruzando o centro ficam na raiz, \(C = \binom{n}{2}\).</p>
+          <p class="proof-note">A solução clássica é a <em>octree solta</em> (loose octree), em que cada nó aceita objetos que passem até metade do seu lado além da borda: um objeto de lado \(s\) desce até nós de lado \(\ge s\), a ocupação volta a ficar limitada e o Teorema 3 se aplica.</p>
+        </section>
+
+        <!-- ===================== SWEEP AND PRUNE ===================== -->
+        <section class="proof-panel" role="tabpanel" id="proof-sap" aria-labelledby="proofTab-sap" hidden>
+          <p>A lista de objetos fica ordenada por \(x^{\min}\). A varredura compara cada objeto \(a\) com os seguintes enquanto \(b^{\min}_x \lt a^{\max}_x\) e para no primeiro que começa depois. Seja \(k\) o número de pares que se sobrepõem no eixo \(X\) e \(I\) o número de inversões entre a ordem do frame anterior e a atual.</p>
+
+          <div class="proof-thm" data-mode="sap">
+            <p class="proof-thm__title">Teorema 4 (Sweep and Prune, \(O(n + k)\))</p>
+            <p>Em todo frame, \(C(n) = k\) e \(T(n) = O(n + k + I)\). Se cada objeto anda no máximo \(\delta\) por frame em \(X\), com \(2\delta \lt s_{\min}\) (coerência temporal), então \(I \le k\) e</p>
+            \[ T(n) = O(n + k). \]
+          </div>
+          <p><em>Prova.</em> <strong>Ordenação.</strong> A ordenação por inserção move cada elemento para trás uma posição por inversão, então custa \(n - 1 + I\).</p>
+          <p><strong>Varredura.</strong> Para cada \(a\), o laço interno roda uma vez para cada \(b\) seguinte com \(b^{\min}_x \lt a^{\max}_x\) e mais uma vez para parar. Como a lista está ordenada, \(a^{\min}_x \le b^{\min}_x\), e então \(b^{\min}_x \lt a^{\max}_x\) é exatamente a condição de sobreposição em \(X\). Cada par que se sobrepõe em \(X\) é visitado uma vez, a partir do anterior:</p>
+          \[ Q(n) = n + k, \qquad C(n) = k. \]
+          <p><strong>Coerência temporal.</strong> Dois objetos só trocam de ordem entre frames se seus inícios se cruzaram. Com deslocamento de no máximo \(\delta\) cada, os inícios estavam a menos de \(2\delta\) um do outro antes e depois da troca. Como \(2\delta \lt s_{\min}\) e todo intervalo tem comprimento \(\ge s_{\min}\), o que começa depois começa antes de o outro terminar: os dois se sobrepõem em \(X\). Logo cada inversão é um par contado em \(k\), \(I \le k\), e \(T(n) = (n - 1 + I) + (n + k) = O(n + k)\).</p>
+
+          <div class="proof-thm proof-thm--cor" data-mode="sap">
+            <p class="proof-thm__title">Corolário 4.1 (\(O(n)\))</p>
+            <p>Se cada objeto se sobrepõe em \(X\) a no máximo \(K\) outros, então \(k \le Kn/2\) e \(T(n) = O(n)\).</p>
+          </div>
+          <p><em>Prova.</em> Cada par sobreposto em \(X\) é contado nos dois objetos: \(2k = \sum_a \#\{b : b \text{ sobrepõe } a \text{ em } X\} \le Kn\). Pelo Teorema 4, \(T(n) = O(n + Kn/2) = O(n)\).</p>
+          <p>A hipótese do corolário vale quando a densidade na projeção é constante: cenas alongadas no eixo de varredura (\(L_x \propto n\)) ou motores que escolhem o eixo de maior variância. A primeira ordenação, ou uma reordenação depois de mudar o conjunto de objetos, custa \(O(n \log n)\).</p>
+          <p>No simulador, a componente da velocidade em \(X\) é sorteada em \(\pm 0{,}5\,v\) e o passo por frame a multiplica por \(v\): na velocidade padrão (\(v = 0{,}8\)), \(\delta \le 0{,}32\), e a condição \(2\delta \lt s_{\min} = 2\) vale até \(v \approx 1{,}4\). Acima disso a ordenação continua correta, só pode custar mais que \(k\).</p>
+
+          <h3>Correção</h3>
+          <p><strong>Completude.</strong> Se \(A\) e \(B\) se sobrepõem, então \(B^{\min}_x \lt A^{\max}_x\) e \(A^{\min}_x \lt B^{\max}_x\). Suponha \(A\) antes de \(B\) na lista (\(A^{\min}_x \le B^{\min}_x\)). Todo objeto entre os dois começa no máximo em \(B^{\min}_x \lt A^{\max}_x\), então a varredura de \(A\) não para antes de chegar a \(B\), e o par é testado.</p>
+          <p><strong>Unicidade.</strong> Só o anterior na lista varre o seguinte.</p>
+
+          <h3>Limites da hipótese: quanto vale k</h3>
+          <p>Pelo lema do Modelo, dois cubos se sobrepõem em \(X\) com probabilidade \(\approx 2\bar s / L\), então \(\mathbb{E}[k] \approx \binom{n}{2}\, \frac{2\bar s}{L}\):</p>
+          <ul class="proof-list">
+            <li><strong>Densidade constante em 3D (H3b):</strong> \(L \propto n^{1/3} \Rightarrow \mathbb{E}[k] = \Theta(n^{5/3})\). Um eixo só não separa o suficiente: os cubos que se alinham em \(X\) podem estar longe em \(y\) e \(z\).</li>
+            <li><strong>Arena fixa (H3a):</strong> \(\mathbb{E}[k] \approx 0{,}2\binom{n}{2} = \Theta(n^2)\). Com \(n = 150\), cerca de 2,2 mil pares contra 11 mil da força bruta.</li>
+            <li><strong>Pior caso:</strong> todos alinhados em \(X\), \(k = \binom{n}{2}\).</li>
+          </ul>
+        </section>
+
+        <!-- ===================== VERIFICAÇÃO ===================== -->
+        <section class="proof-panel" role="tabpanel" id="proof-verificacao" aria-labelledby="proofTab-verificacao" hidden>
+          <h3>1. Cena atual</h3>
+          <p>As quatro estratégias rodam sobre os mesmos cubos da cena, com a célula e a profundidade atuais.</p>
+          <div class="proof-actions"><button type="button" id="proofSceneBtn" class="btn btn--small">Medir a cena atual</button><span id="proofSceneStatus" class="proof-status"></span></div>
+          <div class="table-scroll"><table class="data-table proof-table" id="proofSceneTable" hidden>
+            <thead><tr><th>Estratégia</th><th>Pares candidatos \(C\)</th><th>Colisões</th><th>Conferência</th></tr></thead>
+            <tbody></tbody>
+          </table></div>
+          <ul class="proof-list" id="proofSceneFacts"></ul>
+
+          <h3>2. Expoente dos pares (experimento de crescimento)</h3>
+          <p>Conta \(C(n)\) para \(n\) de 100 a 1600, com duas cenas por \(n\), nos dois regimes, e ajusta \(C(n) = a\,n^{\kappa}\) por mínimos quadrados em escala log-log. A contagem é determinística: o mesmo navegador ou outro dá o mesmo resultado.</p>
+          <div class="proof-actions"><button type="button" id="proofGrowthBtn" class="btn btn--small">Rodar o experimento</button><span id="proofGrowthStatus" class="proof-status"></span></div>
+          <div class="table-scroll"><table class="data-table proof-table" id="proofGrowthTable" hidden>
+            <thead><tr><th>Estratégia</th><th>\(\kappa\) densidade constante</th><th>previsto</th><th>\(\kappa\) arena fixa</th><th>previsto</th></tr></thead>
+            <tbody></tbody>
+          </table></div>
+
+          <h3>3. Tempo (benchmark)</h3>
+          <p id="proofBenchText">O benchmark (tecla B) mede o tempo de \(n = 10\) a \(150\) na arena fixa e ajusta \(t = a\,n^{k}\). Rode-o para ver os expoentes aqui.</p>
+          <div class="table-scroll"><table class="data-table proof-table" id="proofBenchTable" hidden>
+            <thead><tr><th>Estratégia</th><th>\(k\) medido</th><th>\(R^2\)</th></tr></thead>
+            <tbody></tbody>
+          </table></div>
+          <p class="proof-note">Os testes automáticos (<code>npm test</code>) conferem, em cenas com semente e ao longo de vários frames, que a grade, a Octree e o Sweep and Prune acham exatamente as colisões da força bruta, sem repetir pares, e verificam os expoentes deste experimento.</p>
+        </section>
+      </div>
+    </div>
+  </div>
 
   <!-- MODAL: teoria -->
   <div id="theoryModal" class="modal hidden">
@@ -345,12 +611,16 @@
           <p>Estrutura hierárquica que subdivide o espaço 3D em 8 octantes, recursivamente. Usa <strong>retenção no nó pai</strong>: se a caixa de um objeto não cabe inteira num filho, o objeto fica no nó atual em vez de ser duplicado, o que elimina o <em>straddling problem</em>. Na busca, os objetos dos nós ancestrais são testados contra os dos descendentes cuja região eles tocam.</p>
         </div>
         <div class="theory-block">
+          <h3>Sweep and Prune, O(n + k)</h3>
+          <p>É a broad-phase de motores como Bullet e PhysX. Projeta cada caixa no eixo X e mantém a lista ordenada pelo início do intervalo. A varredura testa cada objeto só contra os seguintes cujo intervalo começa antes de o dele terminar. A lista sobrevive entre frames: como os objetos andam pouco, ela chega <strong>quase ordenada</strong> e a ordenação por inserção custa perto de O(n). Essa é a <em>coerência temporal</em>. O <strong>k</strong> é o número de pares que se sobrepõem em X; se muitos objetos se alinham no mesmo X, a varredura degrada para O(n²). Na cena, a régua verde na frente da arena mostra os intervalos: os empilhados são os pares visitados.</p>
+        </div>
+        <div class="theory-block">
           <h3>Constantes ocultas e ponto de cruzamento</h3>
-          <p>A notação Big-O ignora constantes. Porém a Grade e a Octree gastam tempo de CPU montando a estrutura a cada frame. Para valores pequenos de <strong>N</strong>, esse <em>overhead</em> deixa a Força Bruta mais rápida, até as curvas se cruzarem.</p>
+          <p>A notação Big-O ignora constantes. Porém a Grade, a Octree e o Sweep and Prune gastam tempo de CPU montando ou atualizando a estrutura a cada frame. Para valores pequenos de <strong>N</strong>, esse <em>overhead</em> deixa a Força Bruta mais rápida, até as curvas se cruzarem.</p>
         </div>
         <div class="theory-block">
           <h3>Custo por fase e expoente medido</h3>
-          <p>O tempo de detecção tem duas partes: <strong>montar a estrutura</strong> e <strong>consultar os pares</strong>. A Força Bruta só tem a segunda; a Grade e a Octree pagam a primeira a cada frame para encolher a segunda. O benchmark também ajusta <strong>t = a·n<sup>k</sup></strong> aos tempos medidos: em escala log-log a curva vira uma reta, e a inclinação dela é o expoente <strong>k</strong>, que pode ser comparado com o teórico.</p>
+          <p>O tempo de detecção tem duas partes: <strong>montar a estrutura</strong> e <strong>consultar os pares</strong>. A Força Bruta só tem a segunda; as outras pagam a primeira a cada frame para encolher a segunda. O benchmark também ajusta <strong>t = a·n<sup>k</sup></strong> aos tempos medidos: em escala log-log a curva vira uma reta, e a inclinação dela é o expoente <strong>k</strong>, que pode ser comparado com o teórico.</p>
         </div>
         <div class="theory-block">
           <h3>O que a telemetria mostra</h3>
@@ -418,15 +688,6 @@
   <div id="stressFlicker" hidden></div>
 
   <!-- Scripts -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/Pass.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
   <script type="module" src="/static/js/main.js"></script>
 </body>
 </html>

@@ -4,10 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>PHYSICS_SIM: simulador de colisão 3D para estudar broad-phase</title>
-<meta name="description" content="Compare Força Bruta, Grade Espacial e Octree numa cena 3D com até 150 cubos e tempo de detecção medido a cada frame.">
+<meta name="description" content="Compare Força Bruta, Grade Espacial, Octree e Sweep and Prune numa cena 3D com até 150 cubos e tempo de detecção medido a cada frame.">
 <meta property="og:type" content="website">
 <meta property="og:title" content="PHYSICS_SIM: simulador de colisão 3D para estudar broad-phase">
-<meta property="og:description" content="Três algoritmos de broad-phase na mesma cena 3D, com telemetria por frame.">
+<meta property="og:description" content="Quatro algoritmos de broad-phase na mesma cena 3D, com telemetria por frame.">
 <meta property="og:image" content="/static/img/simulador-apresentacao.webp">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
@@ -25,14 +25,14 @@
 <link rel="stylesheet" href="/static/landing/layout/layout.css">
 <link rel="stylesheet" href="/static/landing/icons/icon.css">
 <!-- Paleta do projeto: fundo grafite, o laranja da Força Bruta nas ações e links, e as
-     cores das três estratégias (laranja, ciano, roxo) só onde se fala de cada uma. -->
+     cores das quatro estratégias (laranja, ciano, roxo, verde) só onde se fala de cada uma. -->
 <style>
 :root {
   --p-bg: #222226; --p-surface: #2a2a2f; --p-ink: #e6e6e9; --p-muted: #a3a3ab;
   --p-accent: #ff7139; --p-accent-ink: #1b1b1f; --p-action: #ff7139; --p-action-ink: #1b1b1f;
   --p-inv-bg: #e6e6e9; --p-inv-surface: #d4d4d7; --p-inv-ink: #222226; --p-inv-muted: #59595d;
   --p-inv-accent: #222226; --p-inv-accent-ink: #e6e6e9; --p-inv-action: #222226; --p-inv-action-ink: #e6e6e9;
-  --c-brute: #ff7139; --c-grid: #00ddff; --c-octree: #a855f7;
+  --c-brute: #ff7139; --c-grid: #00ddff; --c-octree: #a855f7; --c-sap: #a3e635;
   --font-display: "IBM Plex Sans", system-ui, sans-serif;
   --font-text: "IBM Plex Sans", system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
@@ -68,11 +68,15 @@
   .dgm { position: absolute; inset: 0; display: grid; place-items: center; }
   .dgm svg { width: 82%; height: 82%; }
   .dgm .pt { fill: var(--p-ink); }
-  .dgm--brute { --c: var(--c-brute); } .dgm--grid { --c: var(--c-grid); } .dgm--octree { --c: var(--c-octree); }
+  .dgm--brute { --c: var(--c-brute); } .dgm--grid { --c: var(--c-grid); } .dgm--octree { --c: var(--c-octree); } .dgm--sap { --c: var(--c-sap); }
   .dgm .ln { stroke: var(--c); stroke-width: 1; fill: none; }
   .dgm .faint { stroke: color-mix(in oklab, var(--p-ink) 18%, transparent); stroke-width: 1; fill: none; }
   .dgm .cell { fill: color-mix(in oklab, var(--c) 22%, transparent); stroke: var(--c); stroke-width: 1.5; }
   .dgm .hit { fill: var(--c); }
+  .dgm .bar { stroke: var(--c); stroke-width: 2.5; fill: none; }
+  .dgm .drop { stroke: color-mix(in oklab, var(--c) 45%, transparent); stroke-width: 1; stroke-dasharray: 2 3; fill: none; }
+  /* quatro cards numa linha: o painel encolhe para a seção caber numa tela */
+  @media (min-width: 1024px) { #estrategias .panel { --p-h: 300px; } }
 
   /* Abas de estratégia sobre a cena, no desenho das abas do simulador */
   .hero__media > img[data-strat-shot] { transform: scale(var(--zoom, 1)); transform-origin: var(--zo, 50% 50%); }
@@ -83,19 +87,22 @@
     font: 500 13px/1 var(--font-mono); color: var(--p-ink); background: transparent; }
   .strat-tabs button::before { content: ""; width: 8px; height: 8px; background: var(--c); flex: none; }
   .strat-tabs button small { font-size: 12px; color: var(--p-muted); }
+  /* com quatro abas a notação só aparece na ativa, para a barra caber numa linha */
+  .strat-tabs button:not([aria-pressed="true"]) small { display: none; }
+  .strat-tabs .tab-short { display: none; }
   .strat-tabs button:hover { background: color-mix(in oklab, var(--p-ink) 8%, transparent); }
   .strat-tabs button[aria-pressed="true"] { background: var(--c); color: #0b0b0d; }
   .strat-tabs button[aria-pressed="true"]::before { background: #0b0b0d; }
   .strat-tabs button[aria-pressed="true"] small { color: color-mix(in oklab, #0b0b0d 70%, var(--c)); }
-  .strat-tabs [data-strat="brute"] { --c: var(--c-brute); } .strat-tabs [data-strat="grid"] { --c: var(--c-grid); } .strat-tabs [data-strat="octree"] { --c: var(--c-octree); }
+  .strat-tabs [data-strat="brute"] { --c: var(--c-brute); } .strat-tabs [data-strat="grid"] { --c: var(--c-grid); } .strat-tabs [data-strat="octree"] { --c: var(--c-octree); } .strat-tabs [data-strat="sap"] { --c: var(--c-sap); }
   .hero__media .ly-float { left: var(--s-6); bottom: var(--s-6); border-radius: 0; background: #19191c; font-family: var(--font-mono); }
   .hero__media .ly-float__title { font-size: 15px; }
-  .hero__media[data-active="grid"] { --accent: var(--c-grid); } .hero__media[data-active="octree"] { --accent: var(--c-octree); }
+  .hero__media[data-active="grid"] { --accent: var(--c-grid); } .hero__media[data-active="octree"] { --accent: var(--c-octree); } .hero__media[data-active="sap"] { --accent: var(--c-sap); }
   /* durante a falha as scanlines engrossam, como o (1 + 4·glitch) do shader */
   .hero__media::after { content: ""; position: absolute; inset: 0; z-index: 4; pointer-events: none;
     background: repeating-linear-gradient(0deg, rgb(0 0 0 / .5) 0 1px, transparent 1px 3px); opacity: calc(var(--glitch, 0) * .9); }
   /* Cada estratégia com o quadrado e a cor que tem no simulador */
-  #estrategias .card:has(.dgm--brute) { --c: var(--c-brute); } #estrategias .card:has(.dgm--grid) { --c: var(--c-grid); } #estrategias .card:has(.dgm--octree) { --c: var(--c-octree); }
+  #estrategias .card:has(.dgm--brute) { --c: var(--c-brute); } #estrategias .card:has(.dgm--grid) { --c: var(--c-grid); } #estrategias .card:has(.dgm--octree) { --c: var(--c-octree); } #estrategias .card:has(.dgm--sap) { --c: var(--c-sap); }
   #estrategias .card > h3 { display: flex; align-items: baseline; gap: 10px; }
   #estrategias .card > h3::before { content: ""; width: 9px; height: 9px; background: var(--c); flex: none; transform: translateY(-1px); }
   #estrategias .panel { transition: border-color .2s; }
@@ -115,6 +122,8 @@
     .strat-tabs { top: var(--s-5); left: var(--s-5); max-width: calc(100% - 2 * var(--s-5)); }
     .strat-tabs button { padding: 0 8px; font-size: 12px; }
     .strat-tabs button small { display: none; }
+    .strat-tabs .tab-long { display: none; }
+    .strat-tabs .tab-short { display: inline; }
     /* no celular as linhas longas do código quebram em vez de sair da moldura */
     #medicao .ui-code { --w: 100%; }
     #medicao .ui-code__pre, #medicao .ui-code__ln { white-space: pre-wrap; overflow-wrap: anywhere; }
@@ -152,19 +161,21 @@
     <div class="wrap"><div class="hero-text grid hero__grid">
       <div class="hero__text span-5">
         <p class="hero__kicker"><span class="dot" aria-hidden="true"></span>Trabalho acadêmico de física 3D</p>
-        <h1 id="hero-h" data-glitch="load">Simulador de colisão 3D com três algoritmos</h1>
-        <p class="hero__lead">Compare Força Bruta, Grade Espacial e Octree na mesma cena, com até 150 cubos e o tempo de detecção medido a cada frame.</p>
+        <h1 id="hero-h" data-glitch="load">Simulador de colisão 3D com quatro algoritmos</h1>
+        <p class="hero__lead">Compare Força Bruta, Grade Espacial, Octree e Sweep and Prune na mesma cena, com até 150 cubos e o tempo de detecção medido a cada frame.</p>
         <div class="btn-row"><a class="btn btn--primary" href="/simulador">Abrir o simulador<svg class="m-arrow" viewBox="0 0 12 12" aria-hidden="true"><path class="m-arrow__stem" d="M1 6h8"/><path class="m-arrow__head" d="M4.5 2.5 8 6l-3.5 3.5"/></svg></a><a class="btn btn--secondary" href="#estrategias">Ver as estratégias</a></div>
       </div>
       <div class="hero__media span-6 start-7" data-strat-host data-active="brute" data-cube-edge>
         <div class="strat-tabs" role="group" aria-label="Estratégia mostrada">
           <button type="button" data-strat="brute" aria-pressed="true" data-fact="Força bruta: 11.175 pares testados.">Força bruta <small>O(n²)</small></button>
-          <button type="button" data-strat="grid" aria-pressed="false" data-fact="Grade: 442 pares testados.">Grade <small>O(n)</small></button>
-          <button type="button" data-strat="octree" aria-pressed="false" data-fact="Octree: 3.042 pares testados.">Octree <small>O(n log n)</small></button>
+          <button type="button" data-strat="grid" aria-pressed="false" data-fact="Grade: 443 pares testados.">Grade <small>O(n)</small></button>
+          <button type="button" data-strat="octree" aria-pressed="false" data-fact="Octree: 2.556 pares testados.">Octree <small>O(n log n)</small></button>
+          <button type="button" data-strat="sap" aria-pressed="false" data-fact="Sweep and prune: 2.394 pares testados."><span class="tab-long">Sweep and prune</span><span class="tab-short" aria-hidden="true">SAP</span> <small>O(n + k)</small></button>
         </div>
-        <img data-strat-shot="brute" src="/static/img/simulador-apresentacao.webp" alt="O simulador em modo apresentação: 45 cubos laranja e vermelhos na caixa 3D, com as linhas dos pares testados pela força bruta" width="1000" height="1140" style="--ly-pos: 50% 40%" fetchpriority="high">
-        <img data-strat-shot="grid" hidden src="/static/img/simulador-paineis.webp" alt="90 cubos no modo Grade Espacial, com as células da grade em ciano em volta dos cubos" width="1600" height="1000" loading="lazy" style="--zoom: 1.5; --zo: 50% 18%">
-        <img data-strat-shot="octree" hidden src="/static/img/simulador-octree.webp" alt="40 cubos no modo Octree, com os planos de subdivisão em roxo" width="1600" height="1000" loading="lazy" style="--zoom: 1.8; --zo: 50% 11%">
+        <img data-strat-shot="brute" src="/static/img/simulador-apresentacao.webp" alt="O simulador em modo apresentação: 45 cubos laranja e amarelos na caixa 3D, os em colisão em rosa, com as linhas dos pares testados pela força bruta" width="1000" height="1140" style="--ly-pos: 50% 40%" fetchpriority="high">
+        <img data-strat-shot="grid" hidden src="/static/img/simulador-paineis.webp" alt="90 cubos no modo Grade Espacial, com as células da grade em ciano em volta dos cubos" width="1600" height="1000" loading="lazy" style="--zoom: 1.25; --zo: 52% 40%">
+        <img data-strat-shot="octree" hidden src="/static/img/simulador-octree.webp" alt="40 cubos no modo Octree, com os planos de subdivisão em roxo dentro da caixa" width="1600" height="1000" loading="lazy" style="--zoom: 1.5; --zo: 50% 40%">
+        <img data-strat-shot="sap" hidden src="/static/img/simulador-sap.webp" alt="40 cubos no modo Sweep and Prune, com a régua dos intervalos no eixo X em verde na frente da arena" width="1600" height="1000" loading="lazy" style="--zoom: 1.4; --zo: 45% 42%">
         <div class="ly-float">
           <div class="ly-float__row"><span class="ly-live">150 cubos</span><span>por frame</span></div>
           <div class="ly-float__title" data-strat-fact aria-live="polite">Força bruta: 11.175 pares testados.</div>
@@ -190,9 +201,9 @@
 
   <section class="section" id="estrategias" style="--hm: 2" aria-labelledby="estrategias-h">
     <div class="wrap">
-      <div class="section-head"><h2 id="estrategias-h">Três estratégias de broad&#8209;phase. <span class="muted">Pares testados numa cena de 150 cubos.</span></h2></div>
+      <div class="section-head"><h2 id="estrategias-h">Quatro estratégias de broad&#8209;phase. <span class="muted">Pares testados numa cena de 150 cubos.</span></h2></div>
       <div class="grid">
-        <article class="card card--row card--open span-4" data-glitch="hover" data-glitch-target=".panel">
+        <article class="card card--row card--open span-3" data-glitch="hover" data-glitch-target=".panel">
           <h3>Testa todos os pares</h3>
           <p>Força Bruta, O(n²): 11.175 testes AABB por frame e nenhum custo de montagem.</p>
           <div class="panel"><div class="dgm dgm--brute" role="img" aria-label="Sete pontos ligados entre si por todas as 21 linhas possíveis">
@@ -201,9 +212,9 @@
               <g class="pt"><circle cx="30" cy="30" r="4"/><circle cx="90" cy="20" r="4"/><circle cx="160" cy="35" r="4"/><circle cx="60" cy="80" r="4"/><circle cx="120" cy="75" r="4"/><circle cx="170" cy="110" r="4"/><circle cx="90" cy="120" r="4"/></g>
             </svg></div></div>
         </article>
-        <article class="card card--row card--open span-4" data-glitch="hover" data-glitch-target=".panel">
+        <article class="card card--row card--open span-3" data-glitch="hover" data-glitch-target=".panel">
           <h3>Testa só quem divide célula</h3>
-          <p>Grade Espacial, O(n) no caso médio: 442 testes, só entre cubos da mesma célula.</p>
+          <p>Grade Espacial, O(n) no caso médio: 443 testes, só entre cubos da mesma célula.</p>
           <div class="panel"><div class="dgm dgm--grid" role="img" aria-label="Uma grade de células com pontos; só os pontos que dividem uma célula destacada são testados">
             <svg viewBox="0 0 200 140" aria-hidden="true">
               <g class="faint"><path d="M10 10H190M10 50H190M10 90H190M10 130H190M10 10V130M55 10V130M100 10V130M145 10V130M190 10V130"/></g>
@@ -213,9 +224,9 @@
               <g class="hit"><circle cx="66" cy="62" r="4"/><circle cx="88" cy="78" r="4"/><circle cx="156" cy="22" r="4"/><circle cx="178" cy="38" r="4"/></g>
             </svg></div></div>
         </article>
-        <article class="card card--row card--open span-4" data-glitch="hover" data-glitch-target=".panel">
+        <article class="card card--row card--open span-3" data-glitch="hover" data-glitch-target=".panel">
           <h3>Divide o espaço em octantes</h3>
-          <p>Octree, O(n log n): 3.042 testes. Um cubo que cruza um plano fica no nó pai.</p>
+          <p>Octree, O(n log n): 2.556 testes. Um cubo que cruza um plano fica no nó pai.</p>
           <div class="panel"><div class="dgm dgm--octree" role="img" aria-label="Um quadrado subdividido em quadrantes, com um ponto sobre a linha divisória que fica no nó pai">
             <svg viewBox="0 0 200 140" aria-hidden="true">
               <g class="ln"><rect x="40" y="10" width="120" height="120"/><path d="M100 10V130M40 70H160"/></g>
@@ -223,6 +234,19 @@
               <g class="faint"><path d="M115 10V40M100 25H130"/></g>
               <g class="pt"><circle cx="108" cy="18" r="3.5"/><circle cx="122" cy="32" r="3.5"/><circle cx="148" cy="55" r="3.5"/><circle cx="55" cy="112" r="3.5"/><circle cx="85" cy="88" r="3.5"/><circle cx="62" cy="30" r="3.5"/></g>
               <circle class="hit" cx="100" cy="70" r="5"/>
+            </svg></div></div>
+        </article>
+        <article class="card card--row card--open span-3" data-glitch="hover" data-glitch-target=".panel">
+          <h3>Varre o eixo X em ordem</h3>
+          <p>Sweep and Prune, O(n + k): 2.394 testes, só entre cubos cujos intervalos em X se sobrepõem.</p>
+          <div class="panel"><div class="dgm dgm--sap" role="img" aria-label="Seis quadrados projetados no eixo X como intervalos; só os dois pares de intervalos sobrepostos são testados">
+            <svg viewBox="0 0 200 140" aria-hidden="true">
+              <g class="faint"><path d="M10 126H190"/></g>
+              <g class="drop"><path d="M20 44V116M44 44V116M36 78V106M56 78V106M80 42V116M98 42V116M120 82V116M146 82V116M138 38V106M158 38V106M170 80V116M186 80V116"/></g>
+              <g class="bar"><path d="M20 116H44M36 106H56M80 116H98M120 116H146M138 106H158M170 116H186"/></g>
+              <g class="ln"><path d="M32 32L46 68M133 69L148 28"/></g>
+              <g class="pt"><rect x="80" y="24" width="18" height="18"/><rect x="170" y="64" width="16" height="16"/></g>
+              <g class="hit"><rect x="20" y="20" width="24" height="24"/><rect x="36" y="58" width="20" height="20"/><rect x="120" y="56" width="26" height="26"/><rect x="138" y="18" width="20" height="20"/></g>
             </svg></div></div>
         </article>
       </div>
@@ -234,7 +258,7 @@
       <div class="grid">
         <div class="span-5 stack-6">
           <h2 id="medicao-h">Mede só a detecção, frame a frame</h2>
-          <p class="t-lead">O cronômetro cobre a montagem da estrutura e os testes de pares. Desenho, física e som ficam de fora, então as três estratégias fazem o mesmo trabalho medido.</p>
+          <p class="t-lead">O cronômetro cobre a montagem da estrutura e os testes de pares. Desenho, física e som ficam de fora, então todas as estratégias fazem o mesmo trabalho medido.</p>
           <ul class="rows">
             <li><span class="rows__name">Média aparada de 60 frames por N</span></li>
             <li><span class="rows__name">Benchmark de 20 execuções, 15% cortados em cada ponta</span></li>
@@ -280,7 +304,7 @@
       <div class="grid grid--top">
         <div class="span-5 stack-4"><h2 id="perguntas-h">Perguntas</h2><p class="t-lead muted">Sobre os resultados e sobre o uso.</p></div>
         <div class="faq span-6 start-7">
-          <div class="faq__item"><h3>Por que a força bruta ganha com poucos cubos?</h3><p>Grade e Octree montam a estrutura a cada frame. Com N pequeno, esse custo pesa mais que os testes que elas evitam.</p></div>
+          <div class="faq__item"><h3>Por que a força bruta ganha com poucos cubos?</h3><p>Grade, Octree e Sweep and Prune montam ou atualizam a estrutura a cada frame. Com N pequeno, esse custo pesa mais que os testes que elas evitam.</p></div>
           <div class="faq__item"><h3>O que é a economia no topo do simulador?</h3><p>A parte dos N(N−1)/2 testes da força bruta que a estratégia atual deixou de fazer.</p></div>
           <div class="faq__item"><h3>Posso abrir uma cena pronta?</h3><p>Sim. O endereço /simulador?modo=octree&amp;n=60&amp;paineis=1 abre a Octree com 60 cubos e os painéis.</p></div>
           <div class="faq__item"><h3>Quais são os atalhos de teclado?</h3><p>Espaço pausa, R reinicia, S liga o stress test, W o wireframe, P a apresentação e B o benchmark.</p></div>
@@ -306,7 +330,7 @@
           <p class="footer__lede">Trabalho acadêmico de Kaíque Nunes sobre broad-phase em física 3D.</p>
         </div>
         <div class="span-2 footer__col"><h3>Simulador</h3><ul><li><a href="#simulador">Painel</a></li><li><a href="/simulador?n=150">Stress test</a></li></ul></div>
-        <div class="span-2 footer__col"><h3>Estratégias</h3><ul><li><a href="/simulador?modo=grid">Grade Espacial</a></li><li><a href="/simulador?modo=octree">Octree</a></li></ul></div>
+        <div class="span-2 footer__col"><h3>Estratégias</h3><ul><li><a href="/simulador?modo=grid">Grade Espacial</a></li><li><a href="/simulador?modo=octree">Octree</a></li><li><a href="/simulador?modo=sap">Sweep and Prune</a></li></ul></div>
         <div class="span-2 footer__col"><h3>Medição</h3><ul><li><a href="#medicao">Cronômetro</a></li></ul></div>
         <div class="span-2 footer__col"><h3>Perguntas</h3><ul><li><a href="#perguntas">Respostas</a></li></ul></div>
       </div>
