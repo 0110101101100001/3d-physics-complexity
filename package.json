@@ -4,7 +4,8 @@
   "type": "module",
   "description": "Simulador de broad-phase 3D: força bruta, grade espacial, Octree e Sweep and Prune",
   "scripts": {
-    "test": "node --test \"test/**/*.test.js\""
+    "test": "node --test \"test/**/*.test.js\"",
+    "build:pages": "node scripts/build-pages.mjs"
   },
   "engines": {
     "node": ">=20"

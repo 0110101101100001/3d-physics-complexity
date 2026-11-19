@@ -8,22 +8,22 @@
 <meta property="og:type" content="website">
 <meta property="og:title" content="PHYSICS_SIM: simulador de colisão 3D para estudar broad-phase">
 <meta property="og:description" content="Quatro algoritmos de broad-phase na mesma cena 3D, com telemetria por frame.">
-<meta property="og:image" content="/static/img/simulador-apresentacao.webp">
+<meta property="og:image" content="static/img/simulador-apresentacao.webp">
 <meta name="twitter:card" content="summary_large_image">
-<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="static/favicon.svg" type="image/svg+xml">
 <meta name="theme-color" content="#222226">
 <meta name="site-kind" content="software">
 <meta name="page-type" content="software">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wdth,wght@85..100,400..700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/static/landing/system.css">
-<link rel="stylesheet" href="/static/landing/ui/cards.css">
-<link rel="stylesheet" href="/static/landing/motion/motion.css">
-<link rel="stylesheet" href="/static/landing/motion/transitions.css">
-<link rel="stylesheet" href="/static/landing/backgrounds/backgrounds.css">
-<link rel="stylesheet" href="/static/landing/layout/layout.css">
-<link rel="stylesheet" href="/static/landing/icons/icon.css">
+<link rel="stylesheet" href="static/landing/system.css">
+<link rel="stylesheet" href="static/landing/ui/cards.css">
+<link rel="stylesheet" href="static/landing/motion/motion.css">
+<link rel="stylesheet" href="static/landing/motion/transitions.css">
+<link rel="stylesheet" href="static/landing/backgrounds/backgrounds.css">
+<link rel="stylesheet" href="static/landing/layout/layout.css">
+<link rel="stylesheet" href="static/landing/icons/icon.css">
 <!-- Paleta do projeto: fundo grafite, o laranja da Força Bruta nas ações e links, e as
      cores das quatro estratégias (laranja, ciano, roxo, verde) só onde se fala de cada uma. -->
 <style>
@@ -42,15 +42,15 @@
   --ly-scale: 0.98;
 }
 </style>
-<link rel="stylesheet" href="/static/landing/ui/base.css">
-<link rel="stylesheet" href="/static/landing/ui/code/fragment.css">
-<link rel="stylesheet" href="/static/landing/moments/line-carries-colour/moment.css">
+<link rel="stylesheet" href="static/landing/ui/base.css">
+<link rel="stylesheet" href="static/landing/ui/code/fragment.css">
+<link rel="stylesheet" href="static/landing/moments/line-carries-colour/moment.css">
 <script>document.documentElement.classList.add('m-enter');setTimeout(()=>document.documentElement.classList.add('m-enter-done'),700)</script>
-<script src="/static/landing/backgrounds/backgrounds.js"></script>
+<script src="static/landing/backgrounds/backgrounds.js"></script>
 <script>document.documentElement.classList.add('mo-js');setTimeout(()=>document.documentElement.classList.add('mo-safe'),2500)</script>
-<link rel="modulepreload" href="/static/landing/moments/moments.js">
-<link rel="modulepreload" href="/static/landing/moments/lib.js">
-<link rel="modulepreload" href="/static/landing/moments/line-carries-colour/moment.js">
+<link rel="modulepreload" href="static/landing/moments/moments.js">
+<link rel="modulepreload" href="static/landing/moments/lib.js">
+<link rel="modulepreload" href="static/landing/moments/line-carries-colour/moment.js">
 <!-- CSS da página: só o que fica dentro de um visual -->
 <style>
   /* As capturas do simulador mantêm os pixels do pós-processamento (dithering + escala 0.5) */
@@ -148,7 +148,7 @@
       <div class="nav__item"><a class="nav__link" href="#perguntas">Perguntas</a></div>
     </nav>
     <div class="nav__actions">
-      <a class="btn btn--primary" href="/simulador">Abrir o simulador</a>
+      <a class="btn btn--primary" href="simulador">Abrir o simulador</a>
     </div>
     <button class="nav__toggle" type="button" aria-expanded="false" aria-label="Menu">
       <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M2 5h14M2 13h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
@@ -163,7 +163,7 @@
         <p class="hero__kicker"><span class="dot" aria-hidden="true"></span>Trabalho acadêmico de física 3D</p>
         <h1 id="hero-h" data-glitch="load">Simulador de colisão 3D com quatro algoritmos</h1>
         <p class="hero__lead">Compare Força Bruta, Grade Espacial, Octree e Sweep and Prune na mesma cena, com até 150 cubos e o tempo de detecção medido a cada frame.</p>
-        <div class="btn-row"><a class="btn btn--primary" href="/simulador">Abrir o simulador<svg class="m-arrow" viewBox="0 0 12 12" aria-hidden="true"><path class="m-arrow__stem" d="M1 6h8"/><path class="m-arrow__head" d="M4.5 2.5 8 6l-3.5 3.5"/></svg></a><a class="btn btn--secondary" href="#estrategias">Ver as estratégias</a></div>
+        <div class="btn-row"><a class="btn btn--primary" href="simulador">Abrir o simulador<svg class="m-arrow" viewBox="0 0 12 12" aria-hidden="true"><path class="m-arrow__stem" d="M1 6h8"/><path class="m-arrow__head" d="M4.5 2.5 8 6l-3.5 3.5"/></svg></a><a class="btn btn--secondary" href="#estrategias">Ver as estratégias</a></div>
       </div>
       <div class="hero__media span-6 start-7" data-strat-host data-active="brute" data-cube-edge>
         <div class="strat-tabs" role="group" aria-label="Estratégia mostrada">
@@ -172,10 +172,10 @@
           <button type="button" data-strat="octree" aria-pressed="false" data-fact="Octree: 2.556 pares testados.">Octree <small>O(n log n)</small></button>
           <button type="button" data-strat="sap" aria-pressed="false" data-fact="Sweep and prune: 2.394 pares testados."><span class="tab-long">Sweep and prune</span><span class="tab-short" aria-hidden="true">SAP</span> <small>O(n + k)</small></button>
         </div>
-        <img data-strat-shot="brute" src="/static/img/simulador-apresentacao.webp" alt="O simulador em modo apresentação: 45 cubos laranja e amarelos na caixa 3D, os em colisão em rosa, com as linhas dos pares testados pela força bruta" width="1000" height="1140" style="--ly-pos: 50% 40%" fetchpriority="high">
-        <img data-strat-shot="grid" hidden src="/static/img/simulador-paineis.webp" alt="90 cubos no modo Grade Espacial, com as células da grade em ciano em volta dos cubos" width="1600" height="1000" loading="lazy" style="--zoom: 1.25; --zo: 52% 40%">
-        <img data-strat-shot="octree" hidden src="/static/img/simulador-octree.webp" alt="40 cubos no modo Octree, com os planos de subdivisão em roxo dentro da caixa" width="1600" height="1000" loading="lazy" style="--zoom: 1.5; --zo: 50% 40%">
-        <img data-strat-shot="sap" hidden src="/static/img/simulador-sap.webp" alt="40 cubos no modo Sweep and Prune, com a régua dos intervalos no eixo X em verde na frente da arena" width="1600" height="1000" loading="lazy" style="--zoom: 1.4; --zo: 45% 42%">
+        <img data-strat-shot="brute" src="static/img/simulador-apresentacao.webp" alt="O simulador em modo apresentação: 45 cubos laranja e amarelos na caixa 3D, os em colisão em rosa, com as linhas dos pares testados pela força bruta" width="1000" height="1140" style="--ly-pos: 50% 40%" fetchpriority="high">
+        <img data-strat-shot="grid" hidden src="static/img/simulador-paineis.webp" alt="90 cubos no modo Grade Espacial, com as células da grade em ciano em volta dos cubos" width="1600" height="1000" loading="lazy" style="--zoom: 1.25; --zo: 52% 40%">
+        <img data-strat-shot="octree" hidden src="static/img/simulador-octree.webp" alt="40 cubos no modo Octree, com os planos de subdivisão em roxo dentro da caixa" width="1600" height="1000" loading="lazy" style="--zoom: 1.5; --zo: 50% 40%">
+        <img data-strat-shot="sap" hidden src="static/img/simulador-sap.webp" alt="40 cubos no modo Sweep and Prune, com a régua dos intervalos no eixo X em verde na frente da arena" width="1600" height="1000" loading="lazy" style="--zoom: 1.4; --zo: 45% 42%">
         <div class="ly-float">
           <div class="ly-float__row"><span class="ly-live">150 cubos</span><span>por frame</span></div>
           <div class="ly-float__title" data-strat-fact aria-live="polite">Força bruta: 11.175 pares testados.</div>
@@ -190,11 +190,11 @@
         <div class="section-head span-5"><h2 id="simulador-h">O painel do simulador. <span class="muted">Cena, controles e gráfico juntos.</span></h2></div>
         <div class="span-6 start-7 stack-4">
           <p class="t-lead">Escolha a estratégia, ajuste a célula da grade ou a profundidade da Octree e veja o tempo medido ao lado da curva teórica.</p>
-          <p><a class="link" href="/simulador?modo=grid&amp;n=90&amp;paineis=1">Abrir com 90 cubos na grade</a></p>
+          <p><a class="link" href="simulador?modo=grid&amp;n=90&amp;paineis=1">Abrir com 90 cubos na grade</a></p>
         </div>
       </div>
       <div class="frame frame--photo fill" data-cube-edge data-glitch="enter hover">
-        <img class="frame__img shot" src="/static/img/simulador-paineis.webp" alt="O simulador com os painéis abertos: 90 cubos no modo Grade Espacial, as células da grade em ciano, o gráfico de curvas e os controles" width="1600" height="1000" loading="lazy">
+        <img class="frame__img shot" src="static/img/simulador-paineis.webp" alt="O simulador com os painéis abertos: 90 cubos no modo Grade Espacial, as células da grade em ciano, o gráfico de curvas e os controles" width="1600" height="1000" loading="lazy">
       </div>
     </div>
   </section>
@@ -320,7 +320,7 @@
     <div class="closing__cta close--word">
       <div class="section-head--split">
         <div><h2 id="close-h">Abra o simulador no navegador</h2><p class="t-lead">Sem instalar nada além do servidor Flask.</p></div>
-        <a class="btn btn--primary" href="/simulador">Abrir o simulador<svg class="m-arrow" viewBox="0 0 12 12" aria-hidden="true"><path class="m-arrow__stem" d="M1 6h8"/><path class="m-arrow__head" d="M4.5 2.5 8 6l-3.5 3.5"/></svg></a>
+        <a class="btn btn--primary" href="simulador">Abrir o simulador<svg class="m-arrow" viewBox="0 0 12 12" aria-hidden="true"><path class="m-arrow__stem" d="M1 6h8"/><path class="m-arrow__head" d="M4.5 2.5 8 6l-3.5 3.5"/></svg></a>
       </div>
       <p class="close__word" aria-hidden="true" data-glitch="enter">PHYSICS_SIM</p>
     </div>
@@ -329,8 +329,8 @@
         <div class="span-4 stack-4">
           <p class="footer__lede">Trabalho acadêmico de Kaíque Nunes sobre broad-phase em física 3D.</p>
         </div>
-        <div class="span-2 footer__col"><h3>Simulador</h3><ul><li><a href="#simulador">Painel</a></li><li><a href="/simulador?n=150">Stress test</a></li></ul></div>
-        <div class="span-2 footer__col"><h3>Estratégias</h3><ul><li><a href="/simulador?modo=grid">Grade Espacial</a></li><li><a href="/simulador?modo=octree">Octree</a></li><li><a href="/simulador?modo=sap">Sweep and Prune</a></li></ul></div>
+        <div class="span-2 footer__col"><h3>Simulador</h3><ul><li><a href="#simulador">Painel</a></li><li><a href="simulador?n=150">Stress test</a></li></ul></div>
+        <div class="span-2 footer__col"><h3>Estratégias</h3><ul><li><a href="simulador?modo=grid">Grade Espacial</a></li><li><a href="simulador?modo=octree">Octree</a></li><li><a href="simulador?modo=sap">Sweep and Prune</a></li></ul></div>
         <div class="span-2 footer__col"><h3>Medição</h3><ul><li><a href="#medicao">Cronômetro</a></li></ul></div>
         <div class="span-2 footer__col"><h3>Perguntas</h3><ul><li><a href="#perguntas">Respostas</a></li></ul></div>
       </div>
@@ -343,15 +343,15 @@
 </footer>
 
 <nav class="actionbar" aria-label="Ações rápidas">
-  <a class="btn btn--primary" href="/simulador">Abrir o simulador</a>
+  <a class="btn btn--primary" href="simulador">Abrir o simulador</a>
 </nav>
 
-<script type="module" src="/static/landing/system.js"></script>
-<script type="module" src="/static/landing/motion/motion.js"></script>
-<script type="module" src="/static/landing/motion/transitions.js"></script>
-<script type="module" src="/static/landing/layout/layout.js"></script>
-<script type="module" src="/static/js/glitch.js"></script>
-<script type="module" src="/static/js/hero-strategies.js"></script>
-<script type="module" src="/static/js/cube-edges.js"></script>
+<script type="module" src="static/landing/system.js"></script>
+<script type="module" src="static/landing/motion/motion.js"></script>
+<script type="module" src="static/landing/motion/transitions.js"></script>
+<script type="module" src="static/landing/layout/layout.js"></script>
+<script type="module" src="static/js/glitch.js"></script>
+<script type="module" src="static/js/hero-strategies.js"></script>
+<script type="module" src="static/js/cube-edges.js"></script>
 </body>
 </html>

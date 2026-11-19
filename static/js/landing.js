@@ -158,7 +158,7 @@
   }
 
   if (cv) {
-    fetch('/static/data/broadphase-150.json')
+    fetch('static/data/broadphase-150.json')
       .then(function (r) { return r.json(); })
       .then(function (d) {
         data = d;

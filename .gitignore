@@ -14,3 +14,4 @@ __pycache__/
 *.sqlite
 *.log
 hook.cache.json
+_site/
